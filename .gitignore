@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Helix local backups and temporary packages
+.theme-backups/
+*.bak-*
+helix-*.zip
+helix-structure.txt
+investors_ui_command_center_package/
+README_INSTALL_INVESTORS_UI.txt
