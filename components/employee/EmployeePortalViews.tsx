@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition, type ComponentType, type FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
-
+import ProfileAppearanceCard from "@/components/theme/ProfileAppearanceCard";
 import {
   Activity,
   AlertTriangle,
@@ -4607,6 +4607,7 @@ export function EmployeeProfileView({ model }: { model: EmployeePortalReadModel 
           </div>
         </section>
       </section>
+    <ProfileAppearanceCard portal="Employee" />
     </section>
   );
 }

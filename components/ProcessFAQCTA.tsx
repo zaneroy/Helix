@@ -96,8 +96,8 @@ export default function ProcessFAQCTA() {
             <p>Bring operations, finance, investors and your team into one connected Helix workspace.</p>
             <div className="landing-final-cta-actions">
               <Link href="/signup" className="landing-button landing-button-inverse landing-button-large">Start with Helix</Link>
-              <Link href="/admin/login" className="landing-button landing-button-glass landing-button-large">Sign in</Link>
-            </div>
+              <Link href="/login" className="landing-button landing-button-glass landing-button-large">Sign in</Link>
+              </div>
           </div>
         </div>
       </section>
@@ -110,7 +110,7 @@ export default function ProcessFAQCTA() {
           </div>
           <p>Built for businesses that want clarity, control and better financial visibility.</p>
           <div className="landing-footer-links">
-            <a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><Link href="/admin/login">Login</Link>
+            <a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a><Link href="/login">Login</Link>
           </div>
         </div>
       </footer>

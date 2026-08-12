@@ -8,6 +8,7 @@ import type {
   InvestorPortalReadModel,
   InvestorPortalTrendPoint,
 } from "@/types/investor-portal";
+import ProfileAppearanceCard from "@/components/theme/ProfileAppearanceCard";
 import {
   Activity,
   BadgeCheck,
@@ -255,13 +256,14 @@ function DashboardHero({ model }: { model: InvestorPortalReadModel }) {
             </span>
           </div>
 
-          <h2 className="mt-4 text-[28px] font-semibold tracking-[-0.055em] text-[var(--text-primary)] sm:text-[34px]">
-            Investment overview
-          </h2>
-          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[var(--text-tertiary)]">
-            Read-only view of your completed equity, capital contributed, company performance,
-            documents and investor activity.
-          </p>
+          <h2 className="mt-4 text-[28px] font-semibold tracking-[-0.055em] text-[#0b1f3a] sm:text-[34px]">
+  Investment overview
+</h2>
+
+<p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#61778d]">
+  Read-only view of your completed equity, capital contributed, company performance,
+  documents and investor activity.
+</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -453,12 +455,13 @@ function PerformanceReportingPanel({ model }: { model: InvestorPortalReadModel }
     <section className="rounded-xl border border-[var(--primary-border)] bg-[image:var(--gradient-hero)] p-4 shadow-[var(--shadow-card)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-[19px] font-semibold tracking-[-0.045em] text-[var(--text-primary)]">
-            Performance & reporting
-          </h3>
-          <p className="mt-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
-            Investor-visible sales and cash movement from live company records.
-          </p>
+          <h3 className="text-[19px] font-semibold tracking-[-0.045em] text-[#0b1f3a]">
+  Performance & reporting
+</h3>
+
+<p className="mt-2 text-[11px] leading-5 text-[#61778d]">
+  Investor-visible sales and cash movement from live company records.
+</p>
         </div>
         <span className="w-fit rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-2 text-[10px] text-[var(--text-tertiary)]">
           6M
@@ -623,12 +626,13 @@ function DashboardBottomPanel({ model }: { model: InvestorPortalReadModel }) {
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h3 className="text-[19px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
-                Documents & updates
-              </h3>
-              <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">
-                Investor reports, agreements and certificates approved for your account.
-              </p>
+              <h3 className="text-[19px] font-semibold tracking-[-0.04em] text-[#0b1f3a]">
+  Documents & updates
+</h3>
+
+<p className="mt-2 text-[11px] text-[#61778d]">
+  Investor reports, agreements and certificates approved for your account.
+</p>
             </div>
             <span className="hidden rounded-xl border border-[var(--primary-border)] bg-[var(--primary-soft)] px-3 py-2 text-[9px] font-medium text-[var(--primary)] sm:block">
               Investor document centre
@@ -1058,13 +1062,14 @@ function InvestmentRecordHero({ model }: { model: InvestorPortalReadModel }) {
             </span>
           </div>
 
-          <h2 className="mt-4 text-[28px] font-semibold tracking-[-0.055em] text-[var(--text-primary)] sm:text-[34px]">
-            Your investment record
-          </h2>
-          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[var(--text-tertiary)]">
-            This page shows your completed investment activity, capital requests,
-            ownership records and available investment documents.
-          </p>
+          <h2 className="mt-4 text-[28px] font-semibold tracking-[-0.055em] text-[#0b1f3a] sm:text-[34px]">
+  Your investment record
+</h2>
+
+<p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#61778d]">
+  This page shows your completed investment activity, capital requests,
+  ownership records and available investment documents.
+</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -1557,13 +1562,14 @@ function ReportsHero({ model }: { model: InvestorPortalReadModel }) {
             </span>
           </div>
 
-          <h2 className="mt-4 text-[28px] font-semibold tracking-[-0.055em] text-[var(--text-primary)] sm:text-[34px]">
-            Investor reports
-          </h2>
-          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[var(--text-tertiary)]">
-            Read-only reporting built from company performance, cash movement, sales
-            and approved investor documents.
-          </p>
+          <h2 className="mt-4 text-[28px] font-semibold tracking-[-0.055em] text-[#0b1f3a] sm:text-[34px]">
+  Investor reports
+</h2>
+
+<p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#61778d]">
+  Read-only reporting built from company performance, cash movement, sales
+  and approved investor documents.
+</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -1645,12 +1651,13 @@ function FinancialPerformanceReportsPanel({ model }: { model: InvestorPortalRead
     <section className="rounded-2xl border border-[var(--primary-border)] bg-[image:var(--gradient-hero)] p-4 shadow-[var(--shadow-card)] sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h3 className="text-[20px] font-semibold tracking-[-0.045em] text-[var(--text-primary)]">
-            Financial performance
-          </h3>
-          <p className="mt-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
-            Investor-visible trends from live sales, profit and expense records.
-          </p>
+          <h3 className="text-[20px] font-semibold tracking-[-0.045em] text-[#0b1f3a]">
+  Financial performance
+</h3>
+
+<p className="mt-2 text-[11px] leading-5 text-[#61778d]">
+  Investor-visible trends from live sales, profit and expense records.
+</p>
         </div>
         <span className="w-fit rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-2 text-[10px] text-[var(--text-tertiary)]">
           6M
@@ -2167,13 +2174,14 @@ function DocumentsHero({ model }: { model: InvestorPortalReadModel }) {
             </span>
           </div>
 
-          <h2 className="mt-4 text-[30px] font-semibold tracking-[-0.055em] text-[var(--text-primary)] sm:text-[38px]">
-            Investor documents
-          </h2>
-          <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[var(--text-tertiary)]">
-            Access your offer records, investment agreements, certificates, reports and
-            company-approved data room documents in one investor-safe vault.
-          </p>
+          <h2 className="mt-4 text-[30px] font-semibold tracking-[-0.055em] text-[#0b1f3a] sm:text-[38px]">
+  Investor documents
+</h2>
+
+<p className="mt-2 max-w-3xl text-[12px] leading-5 text-[#61778d]">
+  Access your offer records, investment agreements, certificates, reports and
+  company-approved data room documents in one investor-safe vault.
+</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -2294,12 +2302,13 @@ function CoreInvestmentPackPanel({ model }: { model: InvestorPortalReadModel }) 
           <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[var(--primary)]">
             Core investment pack
           </p>
-          <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.045em] text-[var(--text-primary)]">
-            Required investor documents
-          </h3>
-          <p className="mt-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
-            The documents every investor account should have once an investment is completed.
-          </p>
+          <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.045em] text-[#0b1f3a]">
+  Required investor documents
+</h3>
+
+<p className="mt-2 text-[11px] leading-5 text-[#61778d]">
+  The documents every investor account should have once an investment is completed.
+</p>
         </div>
         <span className="w-fit rounded-xl border border-[var(--border)] bg-[var(--surface-soft)] px-3 py-2 text-[10px] text-[var(--text-tertiary)]">
           Offer · Agreement · Certificate
@@ -2526,12 +2535,13 @@ function UploadedDataRoomPanel({
           <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[var(--primary)]">
             Investor data room
           </p>
-          <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.045em] text-[var(--text-primary)]">
-            Uploaded company documents
-          </h3>
-          <p className="mt-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
-            Company-uploaded files grouped by document type. These are controlled by admin visibility rules.
-          </p>
+          <h3 className="mt-2 text-[20px] font-semibold tracking-[-0.045em] text-[#0b1f3a]">
+  Uploaded company documents
+</h3>
+
+<p className="mt-2 text-[11px] leading-5 text-[#61778d]">
+  Company-uploaded files grouped by document type. These are controlled by admin visibility rules.
+</p>
         </div>
       </div>
 
@@ -2856,7 +2866,11 @@ export function InvestorNotificationsView({ model }: { model: InvestorPortalRead
   );
 }
 
-export function InvestorProfileView({ model }: { model: InvestorPortalReadModel }) {
+export function InvestorProfileView({
+  model,
+}: {
+  model: InvestorPortalReadModel;
+}) {
   return (
     <section className="space-y-4">
       <ProfileHero model={model} />
@@ -2865,7 +2879,10 @@ export function InvestorProfileView({ model }: { model: InvestorPortalReadModel 
 
       <div
         className="grid items-start gap-4"
-        style={{ gridTemplateColumns: "minmax(0, 1.08fr) minmax(420px, 0.68fr)" }}
+        style={{
+          gridTemplateColumns:
+            "minmax(0, 1.08fr) minmax(420px, 0.68fr)",
+        }}
       >
         <ProfileAccountDetailsPanel model={model} />
         <ProfileSecurityAccessPanel model={model} />
@@ -2873,11 +2890,16 @@ export function InvestorProfileView({ model }: { model: InvestorPortalReadModel 
 
       <div
         className="grid items-start gap-4"
-        style={{ gridTemplateColumns: "minmax(0, 0.92fr) minmax(0, 1.08fr)" }}
+        style={{
+          gridTemplateColumns:
+            "minmax(0, 0.92fr) minmax(0, 1.08fr)",
+        }}
       >
         <ProfilePositionPanel model={model} />
         <ProfileDocumentsActivityPanel model={model} />
       </div>
+
+      <ProfileAppearanceCard portal="Investor" />
     </section>
   );
 }
@@ -2906,12 +2928,13 @@ function ProfileHero({ model }: { model: InvestorPortalReadModel }) {
               </span>
             </div>
 
-            <h2 className="mt-4 truncate text-[30px] font-semibold tracking-[-0.055em] text-[var(--text-primary)] sm:text-[38px]">
-              {summary.investorName}
-            </h2>
-            <p className="mt-2 truncate text-[12px] text-[var(--text-tertiary)]">
-              {summary.investorEmail || "No email recorded"} · Investor workspace for {summary.companyName}
-            </p>
+            <h2 className="mt-4 truncate text-[30px] font-semibold tracking-[-0.055em] text-[#0b1f3a] sm:text-[38px]">
+  {summary.investorName}
+</h2>
+
+<p className="mt-2 truncate text-[12px] text-[#61778d]">
+  {summary.investorEmail || "No email recorded"} · Investor workspace for {summary.companyName}
+</p>
           </div>
         </div>
 
@@ -3108,12 +3131,13 @@ function ProfilePositionPanel({ model }: { model: InvestorPortalReadModel }) {
           <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-[var(--primary)]">
             Investor position
           </p>
-          <h3 className="mt-2 text-[18px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
-            Your ownership record
-          </h3>
-          <p className="mt-2 text-[11px] leading-5 text-[var(--text-tertiary)]">
-            This section only shows your completed equity. It does not reveal founder or other investor ownership.
-          </p>
+          <h3 className="mt-2 text-[18px] font-semibold tracking-[-0.04em] text-[#0b1f3a]">
+  Your ownership record
+</h3>
+
+<p className="mt-2 text-[11px] leading-5 text-[#61778d]">
+  This section only shows your completed equity. It does not reveal founder or other investor ownership.
+</p>
         </div>
         <span className="text-[22px] font-semibold tracking-[-0.04em] text-[var(--text-primary)]">
           {percent(summary.equityPercent)}

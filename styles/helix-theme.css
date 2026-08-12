@@ -1972,22 +1972,591 @@ body {
 .landing-avatar { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; background: var(--gradient-brand-soft); color: var(--primary); font-size: 12px; font-weight: var(--weight-bold); }
 .landing-testimonial-card figcaption > span:last-child { display: flex; flex-direction: column; gap: 3px; }.landing-testimonial-card figcaption strong { color: var(--text-primary); font-size: 11px; }.landing-testimonial-card figcaption small { color: var(--text-muted); font-size: 9px; }
 
-/* Pricing */
-.landing-pricing-section { padding: var(--landing-section-y) 0; background: var(--landing-bg); }
-.landing-pricing-grid { margin-top: 64px; display: grid; grid-template-columns: repeat(3, 1fr); align-items: stretch; gap: 22px; }
-.landing-price-card { position: relative; min-height: 620px; padding: 30px; display: flex; flex-direction: column; border: 1px solid var(--landing-card-border); border-radius: var(--landing-card-radius); background: var(--landing-card-gradient); box-shadow: var(--landing-shadow-card); transition: transform var(--duration-normal) var(--ease-standard), box-shadow var(--duration-normal) var(--ease-standard), border-color var(--duration-normal) var(--ease-standard); }
-.landing-price-card:hover { transform: translateY(var(--landing-hover-lift)); border-color: var(--landing-card-border-hover); box-shadow: var(--landing-shadow-card-hover); }
-.landing-price-card-featured { border-color: var(--primary-border); background: var(--gradient-brand-soft); box-shadow: var(--shadow-brand); transform: translateY(-16px); }
-.landing-price-card-featured:hover { transform: translateY(-20px); box-shadow: var(--shadow-brand-strong); }
-.landing-popular-badge { position: absolute; top: 24px; right: 24px; min-height: 26px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: var(--radius-pill); background: var(--primary); color: var(--text-inverse); font-size: 9px; font-weight: var(--weight-bold); }
-.landing-plan-icon { width: 42px; height: 42px; display: grid; place-items: center; border: 1px solid var(--primary-border); border-radius: 13px; background: var(--surface); color: var(--primary); font-size: 16px; }
-.landing-price-card h3 { margin: 24px 0 0; color: var(--text-primary); font-size: 24px; letter-spacing: -.03em; }
-.landing-plan-description { min-height: 48px; margin: 8px 0 0; color: var(--landing-copy); font-size: 12px; line-height: 1.65; }
-.landing-plan-price { margin-top: 28px; display: flex; align-items: flex-end; gap: 7px; }.landing-plan-price strong { color: var(--text-primary); font-size: 42px; line-height: 1; letter-spacing: -.05em; }.landing-plan-price span { padding-bottom: 4px; color: var(--text-muted); font-size: 11px; }
-.landing-price-divider { height: 1px; margin: 26px 0 22px; background: var(--border); }
-.landing-price-card ul { margin: 0; padding: 0; display: grid; gap: 12px; list-style: none; }.landing-price-card li { display: flex; align-items: flex-start; gap: 10px; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }.landing-price-card li span { width: 18px; height: 18px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--success-soft); color: var(--success); font-size: 10px; font-weight: var(--weight-bold); }
-.landing-price-button { width: 100%; margin-top: auto; }
-.landing-pricing-note { margin: 34px 0 0; color: var(--text-muted); text-align: center; font-size: 10px; }
+/* ============================================================
+   LANDING — PRICING
+   Clean four-card pricing layout
+   ============================================================ */
+
+.landing-pricing-section {
+  padding: var(--landing-section-y) 0;
+  background:
+    radial-gradient(
+      circle at 10% 10%,
+      var(--landing-orb-blue),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 90% 8%,
+      var(--landing-orb-teal),
+      transparent 28%
+    ),
+    var(--landing-bg);
+}
+
+
+/* ------------------------------------------------------------
+   Heading
+   ------------------------------------------------------------ */
+
+.landing-pricing-header {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.landing-pricing-header h2 {
+  margin: 14px 0 0;
+
+  color: var(--landing-title);
+
+  font-size: clamp(34px, 4vw, 54px);
+  line-height: 1.04;
+  letter-spacing: -0.055em;
+  font-weight: 700;
+}
+
+.landing-pricing-header > p {
+  max-width: 620px;
+
+  margin: 18px auto 0;
+
+  color: var(--landing-copy);
+
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+
+/* ------------------------------------------------------------
+   Monthly / yearly toggle
+   ------------------------------------------------------------ */
+
+.landing-billing-toggle {
+  width: fit-content;
+
+  margin: 34px auto 0;
+  padding: 4px;
+
+  display: flex;
+  align-items: center;
+
+  border: 1px solid var(--landing-card-border);
+  border-radius: 12px;
+
+  background: var(--surface-muted);
+}
+
+.landing-billing-option {
+  min-height: 42px;
+
+  padding: 0 18px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  border: 0;
+  border-radius: 9px;
+
+  background: transparent;
+  color: var(--text-secondary);
+
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.landing-billing-option span {
+  color: var(--primary);
+  font-size: 10px;
+}
+
+.landing-billing-option-active {
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-xs);
+}
+
+
+/* ------------------------------------------------------------
+   Four pricing cards
+   ------------------------------------------------------------ */
+
+.landing-pricing-grid {
+  width: 100%;
+
+  margin-top: 38px;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  align-items: stretch;
+
+  gap: 16px;
+}
+
+
+/* ------------------------------------------------------------
+   Card
+   ------------------------------------------------------------ */
+
+.landing-price-card {
+  position: relative;
+
+  min-width: 0;
+  min-height: 720px;
+
+  padding: 28px 24px;
+
+  display: flex;
+  flex-direction: column;
+
+  border: 1px solid var(--landing-card-border);
+  border-radius: 18px;
+
+  background: var(--landing-surface);
+
+  box-shadow: var(--shadow-xs);
+
+  transition:
+    border-color var(--duration-normal) var(--ease-standard),
+    box-shadow var(--duration-normal) var(--ease-standard),
+    transform var(--duration-normal) var(--ease-standard);
+}
+
+.landing-price-card:hover {
+  transform: translateY(-2px);
+
+  border-color: var(--landing-card-border-hover);
+
+  box-shadow: var(--landing-shadow-card);
+}
+
+
+/* Growth does NOT float above other cards */
+
+.landing-price-card-featured {
+  border-color: var(--primary-border);
+  background: var(--landing-surface);
+  box-shadow:
+    0 0 0 1px var(--primary-border),
+    var(--landing-shadow-card);
+}
+
+.landing-price-card-featured:hover {
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 0 0 1px var(--primary-border),
+    var(--landing-shadow-card-hover);
+}
+
+
+/* ------------------------------------------------------------
+   Plan heading
+   ------------------------------------------------------------ */
+
+.landing-price-card-header {
+  min-height: 330px;
+}
+
+.landing-price-name-row {
+  min-height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+}
+
+.landing-price-name-row h3 {
+  margin: 0;
+
+  color: var(--text-primary);
+
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  font-weight: 750;
+}
+
+.landing-popular-badge {
+  position: static;
+
+  min-height: 22px;
+
+  padding: 0 8px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  background: var(--primary);
+  color: var(--text-inverse);
+
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+
+/* ------------------------------------------------------------
+   Price
+   ------------------------------------------------------------ */
+
+.landing-price-main {
+  min-height: 64px;
+
+  margin-top: 30px;
+
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.landing-price-main strong {
+  color: var(--text-primary);
+
+  font-size: clamp(38px, 3.1vw, 52px);
+  line-height: 0.95;
+  letter-spacing: -0.065em;
+  font-weight: 750;
+}
+
+.landing-price-main > span {
+  padding-bottom: 5px;
+
+  color: var(--text-muted);
+
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.landing-price-main .landing-price-custom {
+  font-size: 32px;
+  letter-spacing: -0.045em;
+}
+
+
+/* ------------------------------------------------------------
+   Price supporting copy
+   ------------------------------------------------------------ */
+
+.landing-price-renewal {
+  min-height: 34px;
+
+  margin: 12px 0 0;
+
+  color: var(--text-muted);
+
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.landing-price-description {
+  min-height: 66px;
+
+  margin: 18px 0 0;
+
+  color: var(--landing-copy);
+
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+
+/* ------------------------------------------------------------
+   Limits — inspired by reference boxes
+   ------------------------------------------------------------ */
+
+.landing-plan-limits {
+  margin-top: 22px;
+
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  gap: 7px;
+}
+
+.landing-plan-limits > div {
+  min-width: 0;
+
+  padding: 10px 9px;
+
+  border: 1px solid var(--landing-card-border);
+  border-radius: 10px;
+
+  background: var(--surface-soft);
+}
+
+.landing-plan-limits span {
+  display: block;
+
+  color: var(--text-muted);
+
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+.landing-plan-limits strong {
+  display: block;
+
+  margin-top: 5px;
+
+  overflow: hidden;
+
+  color: var(--text-primary);
+
+  font-size: 9px;
+  line-height: 1.3;
+  font-weight: 650;
+
+  text-overflow: ellipsis;
+}
+
+
+/* ------------------------------------------------------------
+   Main CTA
+   ------------------------------------------------------------ */
+
+.landing-price-button {
+  width: 100%;
+  min-height: 48px;
+
+  margin-top: 24px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid var(--text-primary);
+  border-radius: 10px;
+
+  background: var(--text-primary);
+  color: var(--text-inverse);
+
+  font-size: 11px;
+  font-weight: 700;
+
+  text-decoration: none;
+
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.landing-price-button:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
+}
+
+.landing-price-button-primary {
+  border-color: var(--primary);
+
+  background: var(--primary);
+
+  color: #ffffff;
+
+  box-shadow: var(--primary-glow);
+}
+
+.landing-price-button-primary:hover {
+  box-shadow: var(--primary-glow-strong);
+}
+
+
+/* ------------------------------------------------------------
+   Trial copy
+   ------------------------------------------------------------ */
+
+.landing-price-trial-copy {
+  min-height: 17px;
+
+  margin: 8px 0 0;
+
+  text-align: center;
+
+  color: var(--text-muted);
+
+  font-size: 8px;
+}
+
+
+/* ------------------------------------------------------------
+   Feature area
+   ------------------------------------------------------------ */
+
+.landing-price-features {
+  margin-top: 24px;
+  padding-top: 20px;
+
+  border-top: 1px solid var(--border-subtle);
+}
+
+.landing-price-features h4 {
+  margin: 0 0 16px;
+
+  color: var(--text-primary);
+
+  font-size: 10px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.landing-price-features ul {
+  margin: 0;
+  padding: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 10px;
+
+  list-style: none;
+}
+
+.landing-price-features li {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 9px;
+
+  color: var(--text-secondary);
+
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.landing-price-feature-icon {
+  width: 16px;
+  height: 16px;
+
+  flex: 0 0 16px;
+
+  margin-top: 0;
+
+  display: grid;
+  place-items: center;
+
+  color: var(--primary);
+}
+
+.landing-price-feature-disabled {
+  opacity: 0.38;
+}
+
+.landing-price-feature-disabled
+.landing-price-feature-icon {
+  color: var(--text-muted);
+}
+
+
+/* ------------------------------------------------------------
+   Bottom pricing note
+   ------------------------------------------------------------ */
+
+.landing-pricing-bottom {
+  max-width: 760px;
+
+  margin: 30px auto 0;
+
+  text-align: center;
+}
+
+.landing-pricing-bottom p {
+  margin: 4px 0;
+
+  color: var(--landing-copy-soft);
+
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.landing-pricing-bottom a {
+  margin-top: 12px;
+
+  display: inline-flex;
+
+  color: var(--primary);
+
+  font-size: 10px;
+  font-weight: 700;
+
+  text-decoration: none;
+}
+
+.landing-pricing-bottom a:hover {
+  text-decoration: underline;
+}
+
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1180px) {
+  .landing-pricing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-price-card {
+    min-height: auto;
+  }
+
+  .landing-price-card-header {
+    min-height: 315px;
+  }
+}
+
+
+@media (max-width: 680px) {
+  .landing-pricing-header h2 {
+    font-size: 36px;
+  }
+
+  .landing-billing-toggle {
+    width: 100%;
+    max-width: 330px;
+  }
+
+  .landing-billing-option {
+    flex: 1;
+  }
+
+  .landing-pricing-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .landing-price-card {
+    min-height: 0;
+    padding: 24px 20px;
+  }
+
+  .landing-price-card-header {
+    min-height: 0;
+  }
+
+  .landing-price-description {
+    min-height: 0;
+  }
+
+  .landing-plan-limits {
+    margin-top: 20px;
+  }
+}
 
 /* Process + FAQ */
 .landing-process-section { padding: var(--landing-section-y) 0; background: var(--landing-section-gradient); }
@@ -2069,4 +2638,560 @@ body {
   .landing-feature-team > div { width: 100%; margin: 16px 0 0; }
   .landing-footer-inner { grid-template-columns: 1fr; text-align: center; }
   .landing-footer-links { justify-content: center; flex-wrap: wrap; }
+}
+
+/* ============================================================
+   HELIX DARK THEME
+   Midnight Navy + Teal
+   ============================================================ */
+
+html {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ----------------------------------------------------------
+     CORE BACKGROUNDS
+     ---------------------------------------------------------- */
+
+  --app-bg: #061426;
+  --page-bg: #061426;
+
+  --surface: #0b1c30;
+  --surface-secondary: #0d2035;
+  --surface-raised: #10263d;
+  --surface-elevated: #122a43;
+  --surface-hover: #142f4a;
+  --surface-active: #173650;
+
+  /* ----------------------------------------------------------
+     TEXT
+     ---------------------------------------------------------- */
+
+  --text-primary: #f4f8fc;
+  --text-secondary: #a9bacb;
+  --text-muted: #748aa0;
+  --text-subtle: #60788f;
+  --text-inverse: #061426;
+
+  /* ----------------------------------------------------------
+     HELIX BRAND
+     ---------------------------------------------------------- */
+
+  --primary: #22c7d8;
+  --primary-hover: #38d2e1;
+  --primary-active: #14aebf;
+
+  --primary-soft: #0b3442;
+  --primary-soft-hover: #104251;
+
+  --primary-border: #17576a;
+
+  --secondary: #3f91f3;
+  --secondary-hover: #59a4ff;
+  --secondary-soft: #102f55;
+
+  /* ----------------------------------------------------------
+     SEMANTIC STATUS COLOURS
+     ---------------------------------------------------------- */
+
+  --success: #4bd39c;
+  --success-hover: #65ddb0;
+  --success-soft: #10382f;
+  --success-border: #1d604c;
+
+  --warning: #e0ac43;
+  --warning-hover: #edbd5d;
+  --warning-soft: #3b3016;
+  --warning-border: #665326;
+
+  --danger: #ff6472;
+  --danger-hover: #ff7985;
+  --danger-soft: #421d28;
+  --danger-border: #733340;
+
+  --info: #4ba6f8;
+  --info-soft: #122f4c;
+
+  /* ----------------------------------------------------------
+     BORDERS
+     ---------------------------------------------------------- */
+
+  --border: #1c3a52;
+  --border-subtle: #142d42;
+  --border-strong: #28516e;
+
+  /* ----------------------------------------------------------
+     INPUTS
+     ---------------------------------------------------------- */
+
+  --input-bg: #091a2c;
+  --input-bg-hover: #0d2136;
+  --input-border: #23445d;
+  --input-border-hover: #2d5b79;
+  --input-placeholder: #678097;
+
+  /* ----------------------------------------------------------
+     SIDEBAR / NAVIGATION
+     ---------------------------------------------------------- */
+
+  --sidebar-bg: #041222;
+  --sidebar-surface: #08192a;
+  --sidebar-border: #18344b;
+
+  --nav-text: #a9baca;
+  --nav-text-active: #6ce3ef;
+
+  --nav-hover-bg: #0b2638;
+  --nav-active-bg: #0d3043;
+  --nav-active-border: #1d6c7e;
+
+  /* ----------------------------------------------------------
+     TOP BAR
+     ---------------------------------------------------------- */
+
+  --topbar-bg: rgba(6, 20, 38, 0.94);
+  --topbar-border: #1b384f;
+
+  /* ----------------------------------------------------------
+     CARDS
+     ---------------------------------------------------------- */
+
+  --card-bg: #0b1c30;
+  --card-bg-hover: #0e2238;
+  --card-border: #1b3a52;
+
+  --panel-bg: #0b1c30;
+  --panel-border: #1b3a52;
+
+  /* ----------------------------------------------------------
+     TABLES
+     ---------------------------------------------------------- */
+
+  --table-header-bg: #091a2b;
+  --table-row-bg: #0b1c30;
+  --table-row-hover: #10263c;
+  --table-border: #19374e;
+
+  /* ----------------------------------------------------------
+     MODALS / MENUS / POPOVERS
+     ---------------------------------------------------------- */
+
+  --modal-bg: #0d2035;
+  --popover-bg: #0d2035;
+  --menu-bg: #0d2035;
+  --tooltip-bg: #142b42;
+
+  /* ----------------------------------------------------------
+     SHADOWS
+     ---------------------------------------------------------- */
+
+  --shadow-xs:
+    0 1px 2px rgba(0, 0, 0, 0.28);
+
+  --shadow-sm:
+    0 4px 12px rgba(0, 0, 0, 0.24);
+
+  --shadow-md:
+    0 10px 30px rgba(0, 0, 0, 0.3);
+
+  --shadow-lg:
+    0 18px 50px rgba(0, 0, 0, 0.36);
+
+  /* ----------------------------------------------------------
+     BRAND GLOW
+     ---------------------------------------------------------- */
+
+  --primary-glow:
+    0 0 24px rgba(34, 199, 216, 0.14);
+
+  --primary-glow-strong:
+    0 0 32px rgba(34, 199, 216, 0.22);
+
+  /* ----------------------------------------------------------
+     CHARTS
+     ---------------------------------------------------------- */
+
+  --chart-grid: #17334a;
+  --chart-axis: #29465d;
+  --chart-label: #8197aa;
+
+  --chart-primary: #24c8d8;
+  --chart-secondary: #4096f5;
+
+  --chart-positive: #4bd39c;
+  --chart-negative: #ff6472;
+  --chart-warning: #e0ac43;
+
+  /* Cash movement */
+
+  --cash-positive: #22c7d8;
+  --cash-positive-strong: #11aebe;
+  --cash-positive-soft: #0e3440;
+
+  --cash-negative: #ff6472;
+  --cash-negative-strong: #dc4657;
+  --cash-negative-soft: #421d28;
+
+  --cash-positive-gradient:
+    linear-gradient(
+      180deg,
+      #3bd5e2 0%,
+      #18adbf 100%
+    );
+
+  --cash-negative-gradient:
+    linear-gradient(
+      180deg,
+      #ff7d88 0%,
+      #db4658 100%
+    );
+
+  --cash-chart-grid: #18374d;
+  --cash-chart-zero: #46657b;
+  --cash-chart-label: #8197aa;
+
+  /* ----------------------------------------------------------
+     GRADIENTS
+     ---------------------------------------------------------- */
+
+  --gradient-brand:
+    linear-gradient(
+      135deg,
+      #18aabd 0%,
+      #268fd0 52%,
+      #22c7d8 100%
+    );
+
+  --gradient-surface:
+    linear-gradient(
+      145deg,
+      #0e2237 0%,
+      #091a2c 100%
+    );
+
+  --gradient-card:
+    linear-gradient(
+      145deg,
+      rgba(17, 42, 66, 0.96),
+      rgba(9, 27, 45, 0.96)
+    );
+
+  /* ----------------------------------------------------------
+     SCROLLBAR
+     ---------------------------------------------------------- */
+
+  --scrollbar-track: #071627;
+  --scrollbar-thumb: #294b62;
+  --scrollbar-thumb-hover: #35637f;
+
+  /* ----------------------------------------------------------
+     FOCUS
+     ---------------------------------------------------------- */
+
+  --focus-ring:
+    0 0 0 3px rgba(34, 199, 216, 0.22);
+
+  /* ----------------------------------------------------------
+     SELECTION
+     ---------------------------------------------------------- */
+
+  --selection-bg: rgba(34, 199, 216, 0.28);
+  --selection-text: #ffffff;
+}
+
+/* ============================================================
+   HELIX DARK THEME — COMPATIBILITY TOKENS
+   Covers existing Helix UI tokens used across Admin/Investor/
+   Employee components.
+   ============================================================ */
+
+html[data-theme="dark"] {
+  /* Additional surfaces used throughout existing components */
+  --surface-soft: #0b1c30;
+  --surface-muted: #091827;
+  --surface-subtle: #0d2034;
+  --surface-inset: #071625;
+
+  /* Additional text hierarchy */
+  --text-tertiary: #8197aa;
+
+  /* Existing Helix brand-border token */
+  --border-brand: #1b5d70;
+
+  /* Header / hero background */
+  --gradient-brand-soft:
+    linear-gradient(
+      135deg,
+      #0c2034 0%,
+      #0d263b 52%,
+      #0a3040 100%
+    );
+
+  /* Existing card shadow token */
+  --shadow-card:
+    0 18px 45px rgba(0, 0, 0, 0.30);
+
+  /* Existing chart tokens */
+  --chart-1: #22c7d8;
+  --chart-2: #4bd39c;
+  --chart-3: #4ba6f8;
+  --chart-4: #e0ac43;
+  --chart-5: #a78bfa;
+
+  --progress-track: #18354a;
+}
+
+/* ============================================================
+   HELIX DARK THEME — ADMIN SHELL
+   Desktop sidebar + navbar
+   ============================================================ */
+
+html[data-theme="dark"] {
+  /* Main desktop navigation bar */
+  --navbar-bg: rgba(6, 20, 38, 0.96);
+
+  /* Desktop sidebar uses this gradient directly */
+  --gradient-panel:
+    linear-gradient(
+      180deg,
+      #071827 0%,
+      #061524 48%,
+      #04111f 100%
+    );
+
+  /* Keep mobile/sidebar token aligned */
+  --sidebar-bg: #061524;
+
+  /* Supporting shell surfaces */
+  --surface-soft: #0b1c30;
+  --surface-hover: #10263b;
+
+  /* Shell borders */
+  --border: #1b384f;
+  --border-subtle: #142d42;
+  --border-brand: #1c6477;
+
+  /* Command palette / overlay compatibility */
+  --overlay-bg: rgba(2, 10, 18, 0.60);
+  --overlay-strong: rgba(2, 10, 18, 0.82);
+
+  /* Shell shadows */
+  --shadow-brand:
+    0 0 24px rgba(34, 199, 216, 0.14);
+
+  --shadow-modal:
+    0 24px 70px rgba(0, 0, 0, 0.48);
+
+  --shadow-success:
+    0 0 14px rgba(75, 211, 156, 0.22);
+}
+
+/* ============================================================
+   HELIX LANDING PAGE — DARK SYSTEM THEME
+   ------------------------------------------------------------
+   The public landing page follows the operating-system theme.
+
+   Light mode keeps the existing Helix landing design unchanged.
+   Dark mode uses the Helix midnight navy / teal visual system.
+
+   Controlled automatically by:
+   html[data-theme="dark"]
+   ============================================================ */
+
+html[data-theme="dark"] {
+  /* ----------------------------------------------------------
+     Landing page foundations
+     ---------------------------------------------------------- */
+
+  --landing-bg: #061426;
+  --landing-bg-soft: #08192b;
+  --landing-bg-blue: #091d31;
+
+  --landing-surface: #0b1c30;
+  --landing-surface-glass: rgba(11, 28, 48, 0.88);
+
+  --landing-nav-bg: rgba(4, 18, 34, 0.92);
+
+  /* ----------------------------------------------------------
+     Borders
+     ---------------------------------------------------------- */
+
+  --landing-card-border: #1b3a52;
+  --landing-card-border-hover: #287087;
+
+  --landing-grid-line: rgba(34, 199, 216, 0.075);
+
+  /* ----------------------------------------------------------
+     Typography
+     ---------------------------------------------------------- */
+
+  --landing-title: #f4f8fc;
+  --landing-copy: #a9bacb;
+  --landing-copy-soft: #748aa0;
+
+  /* ----------------------------------------------------------
+     Brand colours
+     ---------------------------------------------------------- */
+
+  --landing-accent: #22c7d8;
+  --landing-accent-blue: #4b9cf3;
+  --landing-accent-soft: #0b3442;
+
+  /* ----------------------------------------------------------
+     Hero title gradient
+     ---------------------------------------------------------- */
+
+  --landing-title-gradient:
+    linear-gradient(
+      118deg,
+      #32d0dc 0%,
+      #4ba6f8 52%,
+      #28d6df 100%
+    );
+
+  /* ----------------------------------------------------------
+     Main landing backgrounds
+     ---------------------------------------------------------- */
+
+  --landing-hero-bg:
+    radial-gradient(
+      circle at 82% 18%,
+      rgba(34, 199, 216, 0.10),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 12% 72%,
+      rgba(63, 145, 243, 0.07),
+      transparent 30%
+    ),
+    linear-gradient(
+      135deg,
+      #061426 0%,
+      #07182a 45%,
+      #092036 100%
+    );
+
+  --landing-section-gradient:
+    linear-gradient(
+      180deg,
+      #061426 0%,
+      #081a2c 52%,
+      #061426 100%
+    );
+
+  /* ----------------------------------------------------------
+     Cards
+     ---------------------------------------------------------- */
+
+  --landing-card-gradient:
+    linear-gradient(
+      180deg,
+      #0d2136 0%,
+      #091a2c 100%
+    );
+
+  --landing-feature-gradient:
+    linear-gradient(
+      145deg,
+      #0e2238 0%,
+      #091a2c 100%
+    );
+
+  /* ----------------------------------------------------------
+     CTA / buttons
+     ---------------------------------------------------------- */
+
+  --landing-cta-gradient:
+    linear-gradient(
+      125deg,
+      #087f92 0%,
+      #187fb9 52%,
+      #12adbd 100%
+    );
+
+  --landing-button-gradient:
+    linear-gradient(
+      135deg,
+      #18aabd 0%,
+      #268fd0 52%,
+      #22c7d8 100%
+    );
+
+  /* ----------------------------------------------------------
+     Decorative lighting
+     ---------------------------------------------------------- */
+
+  --landing-orb-teal: rgba(34, 199, 216, 0.14);
+  --landing-orb-blue: rgba(63, 145, 243, 0.10);
+  --landing-orb-white: rgba(167, 225, 236, 0.035);
+
+  /* ----------------------------------------------------------
+     Shadows
+     ---------------------------------------------------------- */
+
+  --landing-shadow-card:
+    0 18px 55px rgba(0, 0, 0, 0.24);
+
+  --landing-shadow-card-hover:
+    0 24px 68px rgba(0, 0, 0, 0.34);
+
+  --landing-shadow-preview:
+    0 36px 90px rgba(0, 0, 0, 0.38);
+
+  --landing-shadow-nav:
+    0 1px 0 rgba(77, 143, 170, 0.18);
+
+  --landing-shadow-button:
+    0 12px 32px rgba(34, 199, 216, 0.18);
+
+  --landing-shadow-button-hover:
+    0 16px 42px rgba(34, 199, 216, 0.28);
+}
+
+
+/* ============================================================
+   LANDING DARK — SMALL COMPATIBILITY OVERRIDES
+   ------------------------------------------------------------
+   Some landing components intentionally use the shared Helix
+   semantic variables instead of landing-only variables.
+   ============================================================ */
+
+html[data-theme="dark"] .helix-landing {
+  background: var(--landing-bg);
+  color: var(--landing-title);
+}
+
+html[data-theme="dark"] .landing-nav-shell {
+  border-color: var(--landing-card-border);
+}
+
+html[data-theme="dark"] .landing-dashboard-frame {
+  border-color: var(--landing-card-border);
+  background: var(--landing-surface-glass);
+}
+
+html[data-theme="dark"] .landing-trusted-card,
+html[data-theme="dark"] .landing-testimonial-card {
+  background: var(--landing-surface);
+}
+
+html[data-theme="dark"] .landing-feature-visual {
+  background: var(--surface);
+}
+
+html[data-theme="dark"] .landing-price-card {
+  border-color: var(--landing-card-border);
+}
+
+html[data-theme="dark"] .landing-nav-link,
+html[data-theme="dark"] .landing-footer a {
+  color: var(--landing-copy);
+}
+
+html[data-theme="dark"] .landing-nav-link:hover,
+html[data-theme="dark"] .landing-footer a:hover {
+  color: var(--primary);
 }

@@ -28,6 +28,7 @@ import {
   UserRound,
   UsersRound,
   WalletCards,
+  Palette,
 } from "lucide-react";
 import AdminShell from "@/components/admin/AdminShell";
 import LogoutButton from "@/components/auth/LogoutButton";
@@ -39,6 +40,7 @@ import type {
   WorkspaceMetric,
 } from "./page";
 import type { Notification } from "@/types/notifications";
+import ThemeSwitcher from "@/components/theme/ThemeSwitcher";
 
 type Props = {
   adminName: string;
@@ -55,7 +57,12 @@ type Props = {
   userId: string;
 };
 
-type Section = "overview" | "company" | "account" | "security";
+type Section =
+  | "overview"
+  | "company"
+  | "appearance"
+  | "account"
+  | "security";
 
 const currencies = ["USD", "CAD", "GBP", "EUR", "AUD", "PKR", "AED"];
 
@@ -183,6 +190,7 @@ export default function AdminSettingsClient({
             <nav className="space-y-1">
               <NavButton active={section === "overview"} icon={LayoutDashboard} label="Executive overview" onClick={() => setSection("overview")} />
               <NavButton active={section === "company"} icon={Building2} label="Company identity" onClick={() => setSection("company")} />
+              <NavButton active={section === "appearance"} icon={Palette} label="Appearance" onClick={() => setSection("appearance")} />
               <NavButton active={section === "account"} icon={UserRound} label="Founder account" onClick={() => setSection("account")} />
               <NavButton active={section === "security"} icon={ShieldCheck} label="Security centre" onClick={() => setSection("security")} />
             </nav>
@@ -219,6 +227,10 @@ export default function AdminSettingsClient({
             {section === "company" && (
               <CompanySection company={company} updateCompanySettings={updateCompanySettings} />
             )}
+
+            {section === "appearance" && (
+  <AppearanceSection />
+)}
 
             {section === "account" && (
               <AccountSection
@@ -373,6 +385,22 @@ function CompanySection({ company, updateCompanySettings }: { company: AdminComp
           <InsightCard icon={Activity} title="Audit trail" text="Every visible change is recorded through the Helix event engine." />
         </div>
       </div>
+    </div>
+  );
+}
+
+function AppearanceSection() {
+  return (
+    <div className="space-y-6">
+      <SectionHeading
+        eyebrow="Appearance"
+        title="Choose how Helix looks"
+        description="Select the appearance Helix should use on this device. Light is the default, Dark uses the Helix midnight theme, and System follows your device appearance."
+      />
+
+      <Surface>
+        <ThemeSwitcher />
+      </Surface>
     </div>
   );
 }

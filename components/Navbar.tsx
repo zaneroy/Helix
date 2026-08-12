@@ -27,11 +27,11 @@ export default function Navbar() {
 
         <div className="landing-nav-actions">
           <Link
-            href="/admin/login"
-            className="landing-button landing-button-secondary landing-nav-login"
-          >
-            Login
-          </Link>
+  href="/login"
+  className="landing-button landing-button-secondary landing-nav-login"
+>
+  Login
+</Link>
           <Link
             href="/signup"
             className="landing-button landing-button-primary landing-nav-start"
