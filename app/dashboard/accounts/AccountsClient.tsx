@@ -4,10 +4,13 @@ import { useMemo, useState } from "react";
 import AdminShell from "@/components/admin/AdminShell";
 import type { Notification } from "@/types/notifications";
 import type {
+  AccountingAccount,
   CashAccount,
   CashCategory,
   CashTransaction,
 } from "./page";
+
+import ChartOfAccountsPanel from "./ChartOfAccountsPanel";
 
 type ModalType =
   | "transaction"
@@ -49,6 +52,7 @@ type Props = {
   adminName: string;
   currency: string;
   accounts: CashAccount[];
+  accountingAccounts: AccountingAccount[];
   categories: CashCategory[];
   transactions: CashTransaction[];
   error?: string;
@@ -70,6 +74,7 @@ export default function AccountsClient({
   adminName,
   currency,
   accounts,
+  accountingAccounts,
   categories,
   transactions,
   error,
@@ -787,7 +792,9 @@ export default function AccountsClient({
               transactions={transactions.slice(0, 5)}
               money={money}
             />
-          </section>
+           </section>
+
+          <ChartOfAccountsPanel accounts={accountingAccounts} />
 
           <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className={`${PANEL} overflow-hidden`}>

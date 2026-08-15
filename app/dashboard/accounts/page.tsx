@@ -21,6 +21,27 @@ export type CashAccount = {
   balance: number;
 };
 
+export type AccountingAccount = {
+  id: string;
+  company_id: string;
+  code: string;
+  name: string;
+  account_type: string;
+  account_subtype: string | null;
+  normal_balance: string;
+  system_key: string | null;
+  parent_account_id: string | null;
+  description: string | null;
+  currency_code: string | null;
+  is_system: boolean;
+  is_contra: boolean;
+  allow_manual_posting: boolean;
+  status: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CashCategory = {
   id: string;
   name: string;
@@ -956,12 +977,13 @@ export default async function AccountsPage({
   const { supabase, user, profile } = await getAdminContext();
 
   const [
-    { data: accountRows },
-    { data: categories },
-    { data: transactionRows },
-    { data: company },
-    notifications,
-  ] = await Promise.all([
+  { data: accountRows },
+  { data: categories },
+  { data: transactionRows },
+  { data: accountingAccountRows },
+  { data: company },
+  notifications,
+] = await Promise.all([
     supabase
       .from("cash_accounts")
       .select(
@@ -1024,6 +1046,38 @@ export default async function AccountsPage({
         ascending: false,
       })
       .limit(1000),
+
+        supabase
+      .from("accounting_accounts")
+      .select(
+        `
+          id,
+          company_id,
+          code,
+          name,
+          account_type,
+          account_subtype,
+          normal_balance,
+          system_key,
+          parent_account_id,
+          description,
+          currency_code,
+          is_system,
+          is_contra,
+          allow_manual_posting,
+          status,
+          sort_order,
+          created_at,
+          updated_at
+        `
+      )
+      .eq("company_id", profile.company_id)
+      .order("sort_order", {
+        ascending: true,
+      })
+      .order("code", {
+        ascending: true,
+      }),
 
     supabase
       .from("companies")
@@ -1100,6 +1154,9 @@ export default async function AccountsPage({
     ))
   }
   accounts={accounts}
+  accountingAccounts={
+  (accountingAccountRows || []) as AccountingAccount[]
+}
   categories={(categories || []) as CashCategory[]}
   transactions={transactions}
   error={params?.error}
