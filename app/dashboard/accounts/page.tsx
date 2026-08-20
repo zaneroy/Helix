@@ -117,6 +117,38 @@ const allowedAccountTypes = [
   "other",
 ] as const;
 
+const allowedAccountingAccountTypes = [
+  "asset",
+  "liability",
+  "equity",
+  "revenue",
+  "cost_of_sales",
+  "expense",
+] as const;
+
+type AccountingAccountType =
+  (typeof allowedAccountingAccountTypes)[number];
+
+function getAccountingNormalBalance(
+  accountType: AccountingAccountType,
+  isContra: boolean
+) {
+  const regularNormalBalance =
+    accountType === "asset" ||
+    accountType === "cost_of_sales" ||
+    accountType === "expense"
+      ? "debit"
+      : "credit";
+
+  if (!isContra) {
+    return regularNormalBalance;
+  }
+
+  return regularNormalBalance === "debit"
+    ? "credit"
+    : "debit";
+}
+
 function isDirection(value: string): value is TransactionDirection {
   return value === "inflow" || value === "outflow";
 }
@@ -275,6 +307,456 @@ function revalidateAccountsPages() {
   revalidatePath("/dashboard/reports");
   revalidatePath("/dashboard/activity");
   revalidatePath("/dashboard");
+}
+
+async function addAccountingAccount(formData: FormData) {
+  "use server";
+
+  const { supabase, user, profile } = await getAdminContext();
+
+  const code = String(formData.get("code") || "")
+    .trim()
+    .toUpperCase();
+
+  const name = String(formData.get("name") || "").trim();
+
+  const requestedAccountType = String(
+    formData.get("account_type") || ""
+  ).trim();
+
+  const description = String(
+    formData.get("description") || ""
+  ).trim();
+
+  const isContra =
+    String(formData.get("is_contra") || "") === "true";
+
+  if (!code) {
+    redirect(
+      "/dashboard/accounts?error=GL account code is required."
+    );
+  }
+
+  if (!/^[A-Z0-9.-]{1,20}$/.test(code)) {
+    redirect(
+      "/dashboard/accounts?error=GL account code can only contain letters, numbers, dots and hyphens."
+    );
+  }
+
+  if (!name) {
+    redirect(
+      "/dashboard/accounts?error=GL account name is required."
+    );
+  }
+
+  if (name.length > 120) {
+    redirect(
+      "/dashboard/accounts?error=GL account name must be 120 characters or fewer."
+    );
+  }
+
+  if (
+    !allowedAccountingAccountTypes.includes(
+      requestedAccountType as AccountingAccountType
+    )
+  ) {
+    redirect(
+      "/dashboard/accounts?error=Select a valid GL account type."
+    );
+  }
+
+  const accountType =
+    requestedAccountType as AccountingAccountType;
+
+  const normalBalance =
+    getAccountingNormalBalance(accountType, isContra);
+
+  const { data: existingAccount, error: lookupError } =
+    await supabase
+      .from("accounting_accounts")
+      .select("id")
+      .eq("company_id", profile.company_id)
+      .ilike("code", code)
+      .maybeSingle();
+
+  if (lookupError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(lookupError)
+      )}`
+    );
+  }
+
+  if (existingAccount) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        `GL account code ${code} already exists.`
+      )}`
+    );
+  }
+
+  const companyCurrency = (
+    await getCompanyCurrency(
+      supabase,
+      profile.company_id
+    )
+  )
+    .trim()
+    .toUpperCase();
+
+  const currencyCode = /^[A-Z]{3}$/.test(companyCurrency)
+    ? companyCurrency
+    : "USD";
+
+  const { error } = await supabase
+    .from("accounting_accounts")
+    .insert({
+      company_id: profile.company_id,
+      code,
+      name,
+      account_type: accountType,
+      account_subtype: null,
+      normal_balance: normalBalance,
+      parent_account_id: null,
+      description: description || null,
+      currency_code: currencyCode,
+      is_contra: isContra,
+      allow_manual_posting: true,
+      status: "active",
+      sort_order: 900000,
+      created_by: user.id,
+    });
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    `/dashboard/accounts?success=${encodeURIComponent(
+      `GL account ${code} — ${name} created successfully.`
+    )}`
+  );
+}
+
+async function updateAccountingAccount(formData: FormData) {
+  "use server";
+
+  const { supabase, profile } = await getAdminContext();
+
+  const accountId = String(
+    formData.get("account_id") || ""
+  ).trim();
+
+  const code = String(formData.get("code") || "")
+    .trim()
+    .toUpperCase();
+
+  const name = String(formData.get("name") || "").trim();
+
+  const description = String(
+    formData.get("description") || ""
+  ).trim();
+
+  const allowManualPosting =
+    String(formData.get("allow_manual_posting") || "") ===
+    "true";
+
+  if (!accountId) {
+    redirect(
+      "/dashboard/accounts?error=GL account was not found."
+    );
+  }
+
+  if (!code) {
+    redirect(
+      "/dashboard/accounts?error=GL account code is required."
+    );
+  }
+
+  if (!/^[A-Z0-9.-]{1,20}$/.test(code)) {
+    redirect(
+      "/dashboard/accounts?error=GL account code can only contain letters, numbers, dots and hyphens."
+    );
+  }
+
+  if (!name) {
+    redirect(
+      "/dashboard/accounts?error=GL account name is required."
+    );
+  }
+
+  if (name.length > 120) {
+    redirect(
+      "/dashboard/accounts?error=GL account name must be 120 characters or fewer."
+    );
+  }
+
+  const { data: account, error: accountError } =
+    await supabase
+      .from("accounting_accounts")
+      .select(
+        `
+          id,
+          code,
+          name,
+          is_system,
+          system_key,
+          allow_manual_posting,
+          status
+        `
+      )
+      .eq("id", accountId)
+      .eq("company_id", profile.company_id)
+      .maybeSingle();
+
+  if (accountError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(accountError)
+      )}`
+    );
+  }
+
+  if (!account) {
+    redirect(
+      "/dashboard/accounts?error=GL account was not found."
+    );
+  }
+
+  const { data: duplicateCode, error: duplicateError } =
+    await supabase
+      .from("accounting_accounts")
+      .select("id")
+      .eq("company_id", profile.company_id)
+      .ilike("code", code)
+      .neq("id", accountId)
+      .maybeSingle();
+
+  if (duplicateError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(duplicateError)
+      )}`
+    );
+  }
+
+  if (duplicateCode) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        `GL account code ${code} already exists.`
+      )}`
+    );
+  }
+
+  const updateValues: {
+    code: string;
+    name: string;
+    description: string | null;
+    allow_manual_posting?: boolean;
+  } = {
+    code,
+    name,
+    description: description || null,
+  };
+
+  if (!account.is_system) {
+    updateValues.allow_manual_posting =
+      allowManualPosting;
+  }
+
+  const { error } = await supabase
+    .from("accounting_accounts")
+    .update(updateValues)
+    .eq("id", accountId)
+    .eq("company_id", profile.company_id);
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    `/dashboard/accounts?success=${encodeURIComponent(
+      `GL account ${code} — ${name} updated successfully.`
+    )}`
+  );
+}
+
+async function archiveAccountingAccount(formData: FormData) {
+  "use server";
+
+  const { supabase, profile } = await getAdminContext();
+
+  const accountId = String(
+    formData.get("account_id") || ""
+  ).trim();
+
+  if (!accountId) {
+    redirect(
+      "/dashboard/accounts?error=GL account was not found."
+    );
+  }
+
+  const { data: account, error: accountError } =
+    await supabase
+      .from("accounting_accounts")
+      .select(
+        `
+          id,
+          code,
+          name,
+          system_key,
+          is_system,
+          status
+        `
+      )
+      .eq("id", accountId)
+      .eq("company_id", profile.company_id)
+      .maybeSingle();
+
+  if (accountError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(accountError)
+      )}`
+    );
+  }
+
+  if (!account) {
+    redirect(
+      "/dashboard/accounts?error=GL account was not found."
+    );
+  }
+
+  if (account.is_system || account.system_key) {
+    redirect(
+      "/dashboard/accounts?error=Helix system accounts cannot be archived."
+    );
+  }
+
+  if (account.status === "archived") {
+    redirect(
+      "/dashboard/accounts?error=This GL account is already archived."
+    );
+  }
+
+  const { error } = await supabase
+    .from("accounting_accounts")
+    .update({
+      status: "archived",
+    })
+    .eq("id", account.id)
+    .eq("company_id", profile.company_id);
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    `/dashboard/accounts?success=${encodeURIComponent(
+      `GL account ${account.code} — ${account.name} archived successfully.`
+    )}`
+  );
+}
+
+async function restoreAccountingAccount(formData: FormData) {
+  "use server";
+
+  const { supabase, profile } = await getAdminContext();
+
+  const accountId = String(
+    formData.get("account_id") || ""
+  ).trim();
+
+  if (!accountId) {
+    redirect(
+      "/dashboard/accounts?error=GL account was not found."
+    );
+  }
+
+  const { data: account, error: accountError } =
+    await supabase
+      .from("accounting_accounts")
+      .select(
+        `
+          id,
+          code,
+          name,
+          system_key,
+          is_system,
+          status
+        `
+      )
+      .eq("id", accountId)
+      .eq("company_id", profile.company_id)
+      .maybeSingle();
+
+  if (accountError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(accountError)
+      )}`
+    );
+  }
+
+  if (!account) {
+    redirect(
+      "/dashboard/accounts?error=GL account was not found."
+    );
+  }
+
+  if (account.is_system || account.system_key) {
+    redirect(
+      "/dashboard/accounts?error=Helix system accounts cannot be restored through the custom account workflow."
+    );
+  }
+
+  if (account.status !== "archived") {
+    redirect(
+      "/dashboard/accounts?error=This GL account is not archived."
+    );
+  }
+
+  const { error } = await supabase
+    .from("accounting_accounts")
+    .update({
+      status: "active",
+    })
+    .eq("id", account.id)
+    .eq("company_id", profile.company_id);
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    `/dashboard/accounts?success=${encodeURIComponent(
+      `GL account ${account.code} — ${account.name} restored successfully.`
+    )}`
+  );
 }
 
 async function addCashAccount(formData: FormData) {
@@ -1161,9 +1643,13 @@ export default async function AccountsPage({
   transactions={transactions}
   error={params?.error}
   success={params?.success}
+  addAccountingAccount={addAccountingAccount}
+  updateAccountingAccount={updateAccountingAccount}
+  archiveAccountingAccount={archiveAccountingAccount}
   addCashAccount={addCashAccount}
   updateCashAccount={updateCashAccount}
   archiveCashAccount={archiveCashAccount}
+  restoreAccountingAccount={restoreAccountingAccount}
   addCashTransaction={addCashTransaction}
   transferCash={transferCash}
   notifications={notifications}

@@ -57,6 +57,10 @@ type Props = {
   transactions: CashTransaction[];
   error?: string;
   success?: string;
+  addAccountingAccount: (formData: FormData) => void;
+  updateAccountingAccount: (formData: FormData) => void;
+  archiveAccountingAccount: (formData: FormData) => void;
+  restoreAccountingAccount: (formData: FormData) => void;
   addCashAccount: (formData: FormData) => void;
   updateCashAccount: (formData: FormData) => void;
   archiveCashAccount: (formData: FormData) => void;
@@ -70,6 +74,10 @@ const PANEL =
   "rounded-2xl border border-[color:var(--border-brand)] bg-[image:var(--gradient-card)] shadow-[var(--shadow-card)]";
 
 export default function AccountsClient({
+  addAccountingAccount,
+  updateAccountingAccount,
+  archiveAccountingAccount,
+  restoreAccountingAccount,
   companyName,
   adminName,
   currency,
@@ -794,7 +802,13 @@ export default function AccountsClient({
             />
            </section>
 
-          <ChartOfAccountsPanel accounts={accountingAccounts} />
+          <ChartOfAccountsPanel
+  accounts={accountingAccounts}
+  addAccountingAccount={addAccountingAccount}
+  updateAccountingAccount={updateAccountingAccount}
+  archiveAccountingAccount={archiveAccountingAccount}
+  restoreAccountingAccount={restoreAccountingAccount}
+/>
 
           <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className={`${PANEL} overflow-hidden`}>
