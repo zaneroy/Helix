@@ -42,6 +42,26 @@ export type AccountingAccount = {
   updated_at: string;
 };
 
+export type AccountingPeriod = {
+  id: string;
+  company_id: string;
+  fiscal_year_label: string;
+  period_number: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  status: "open" | "soft_closed" | "locked";
+  is_adjustment_period: boolean;
+  closed_at: string | null;
+  closed_by: string | null;
+  locked_at: string | null;
+  locked_by: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CashCategory = {
   id: string;
   name: string;
@@ -759,6 +779,313 @@ async function restoreAccountingAccount(formData: FormData) {
   );
 }
 
+async function createAccountingFiscalYear(
+  formData: FormData
+) {
+  "use server";
+
+  const { supabase, user, profile } =
+    await getAdminContext();
+
+  const fiscalYearLabel = String(
+    formData.get("fiscal_year_label") || ""
+  ).trim();
+
+  const startDateRaw = String(
+    formData.get("start_date") || ""
+  ).trim();
+
+  const notes = String(
+    formData.get("notes") || ""
+  ).trim();
+
+  if (!fiscalYearLabel) {
+    redirect(
+      "/dashboard/accounts?error=Fiscal year label is required."
+    );
+  }
+
+  const startMatch =
+    /^(\d{4})-(\d{2})-01$/.exec(startDateRaw);
+
+  if (!startMatch) {
+    redirect(
+      "/dashboard/accounts?error=Fiscal year must start on the first day of a month."
+    );
+  }
+
+  const startYear = Number(startMatch[1]);
+  const startMonth = Number(startMatch[2]);
+
+  if (
+    !Number.isInteger(startYear) ||
+    startYear < 1900 ||
+    startYear > 2200 ||
+    startMonth < 1 ||
+    startMonth > 12
+  ) {
+    redirect(
+      "/dashboard/accounts?error=Enter a valid fiscal year start date."
+    );
+  }
+
+  const fiscalYearStart = new Date(
+    Date.UTC(startYear, startMonth - 1, 1)
+  );
+
+  const fiscalYearEnd = new Date(
+    Date.UTC(startYear, startMonth - 1 + 12, 0)
+  );
+
+  const fiscalYearStartIso =
+    fiscalYearStart.toISOString().slice(0, 10);
+
+  const fiscalYearEndIso =
+    fiscalYearEnd.toISOString().slice(0, 10);
+
+  const {
+    data: existingLabelRows,
+    error: existingLabelError,
+  } = await supabase
+    .from("accounting_periods")
+    .select("id")
+    .eq("company_id", profile.company_id)
+    .eq("fiscal_year_label", fiscalYearLabel)
+    .limit(1);
+
+  if (existingLabelError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(existingLabelError)
+      )}`
+    );
+  }
+
+  if ((existingLabelRows || []).length > 0) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        `Fiscal year ${fiscalYearLabel} already exists.`
+      )}`
+    );
+  }
+
+  const {
+    data: overlappingPeriods,
+    error: overlapError,
+  } = await supabase
+    .from("accounting_periods")
+    .select(
+      "id, fiscal_year_label, start_date, end_date"
+    )
+    .eq("company_id", profile.company_id)
+    .lte("start_date", fiscalYearEndIso)
+    .gte("end_date", fiscalYearStartIso)
+    .limit(1);
+
+  if (overlapError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(overlapError)
+      )}`
+    );
+  }
+
+  if ((overlappingPeriods || []).length > 0) {
+    const overlapping =
+      overlappingPeriods![0];
+
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        `This fiscal year overlaps with ${overlapping.fiscal_year_label}.`
+      )}`
+    );
+  }
+
+  const periods = Array.from(
+    { length: 12 },
+    (_, index) => {
+      const periodStart = new Date(
+        Date.UTC(
+          startYear,
+          startMonth - 1 + index,
+          1
+        )
+      );
+
+      const periodEnd = new Date(
+        Date.UTC(
+          startYear,
+          startMonth - 1 + index + 1,
+          0
+        )
+      );
+
+      const name = new Intl.DateTimeFormat(
+        "en-GB",
+        {
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        }
+      ).format(periodStart);
+
+      return {
+        company_id: profile.company_id,
+        fiscal_year_label: fiscalYearLabel,
+        period_number: index + 1,
+        name,
+        start_date: periodStart
+          .toISOString()
+          .slice(0, 10),
+        end_date: periodEnd
+          .toISOString()
+          .slice(0, 10),
+        status: "open",
+        is_adjustment_period: false,
+        notes: notes || null,
+        created_by: user.id,
+      };
+    }
+  );
+
+  const { error } = await supabase
+    .from("accounting_periods")
+    .insert(periods);
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    `/dashboard/accounts?success=${encodeURIComponent(
+      `Fiscal year ${fiscalYearLabel} created with 12 monthly accounting periods.`
+    )}`
+  );
+}
+
+async function softCloseAccountingPeriod(
+  formData: FormData
+) {
+  "use server";
+
+  const { supabase } = await getAdminContext();
+
+  const periodId = String(
+    formData.get("period_id") || ""
+  ).trim();
+
+  if (!periodId) {
+    redirect(
+      "/dashboard/accounts?error=Accounting period was not found."
+    );
+  }
+
+  const { error } = await supabase.rpc(
+    "soft_close_accounting_period",
+    {
+      p_period_id: periodId,
+    }
+  );
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    "/dashboard/accounts?success=Accounting period soft closed successfully."
+  );
+}
+
+async function reopenAccountingPeriod(
+  formData: FormData
+) {
+  "use server";
+
+  const { supabase } = await getAdminContext();
+
+  const periodId = String(
+    formData.get("period_id") || ""
+  ).trim();
+
+  if (!periodId) {
+    redirect(
+      "/dashboard/accounts?error=Accounting period was not found."
+    );
+  }
+
+  const { error } = await supabase.rpc(
+    "reopen_accounting_period",
+    {
+      p_period_id: periodId,
+    }
+  );
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    "/dashboard/accounts?success=Accounting period reopened successfully."
+  );
+}
+
+async function lockAccountingPeriod(
+  formData: FormData
+) {
+  "use server";
+
+  const { supabase } = await getAdminContext();
+
+  const periodId = String(
+    formData.get("period_id") || ""
+  ).trim();
+
+  if (!periodId) {
+    redirect(
+      "/dashboard/accounts?error=Accounting period was not found."
+    );
+  }
+
+  const { error } = await supabase.rpc(
+    "lock_accounting_period",
+    {
+      p_period_id: periodId,
+    }
+  );
+
+  if (error) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        getErrorMessage(error)
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    "/dashboard/accounts?success=Accounting period locked successfully."
+  );
+}
+
 async function addCashAccount(formData: FormData) {
   "use server";
 
@@ -1463,112 +1790,144 @@ export default async function AccountsPage({
   { data: categories },
   { data: transactionRows },
   { data: accountingAccountRows },
+  { data: accountingPeriodRows },
   { data: company },
   notifications,
 ] = await Promise.all([
-    supabase
-      .from("cash_accounts")
-      .select(
-        "id, company_id, name, account_type, currency, opening_balance, status, notes, created_at"
-      )
-      .eq("company_id", profile.company_id)
-      .order("status", {
-        ascending: false,
-      })
-      .order("created_at", {
-        ascending: true,
-      }),
+  supabase
+    .from("cash_accounts")
+    .select(
+      "id, company_id, name, account_type, currency, opening_balance, status, notes, created_at"
+    )
+    .eq("company_id", profile.company_id)
+    .order("status", {
+      ascending: false,
+    })
+    .order("created_at", {
+      ascending: true,
+    }),
 
-    supabase
-      .from("cash_categories")
-      .select("id, name, category_type, status")
-      .eq("company_id", profile.company_id)
-      .eq("status", "active")
-      .order("name", {
-        ascending: true,
-      }),
+  supabase
+    .from("cash_categories")
+    .select("id, name, category_type, status")
+    .eq("company_id", profile.company_id)
+    .eq("status", "active")
+    .order("name", {
+      ascending: true,
+    }),
 
-    supabase
-      .from("cash_ledger")
-      .select(
-        `
+  supabase
+    .from("cash_ledger")
+    .select(
+      `
+        id,
+        company_id,
+        account_id,
+        category_id,
+        source_type,
+        source_id,
+        direction,
+        amount,
+        category,
+        description,
+        reference,
+        transaction_date,
+        status,
+        reconciled,
+        created_by,
+        created_at,
+        account:cash_accounts!cash_ledger_account_id_fkey(
           id,
-          company_id,
-          account_id,
-          category_id,
-          source_type,
-          source_id,
-          direction,
-          amount,
-          category,
-          description,
-          reference,
-          transaction_date,
-          status,
-          reconciled,
-          created_by,
-          created_at,
-          account:cash_accounts!cash_ledger_account_id_fkey(
-            id,
-            name,
-            account_type
-          ),
-          cash_category:cash_categories!cash_ledger_category_id_fkey(
-            id,
-            name,
-            category_type
-          )
-        `
-      )
-      .eq("company_id", profile.company_id)
-      .order("transaction_date", {
-        ascending: false,
-      })
-      .order("created_at", {
-        ascending: false,
-      })
-      .limit(1000),
-
-        supabase
-      .from("accounting_accounts")
-      .select(
-        `
-          id,
-          company_id,
-          code,
           name,
-          account_type,
-          account_subtype,
-          normal_balance,
-          system_key,
-          parent_account_id,
-          description,
-          currency_code,
-          is_system,
-          is_contra,
-          allow_manual_posting,
-          status,
-          sort_order,
-          created_at,
-          updated_at
-        `
-      )
-      .eq("company_id", profile.company_id)
-      .order("sort_order", {
-        ascending: true,
-      })
-      .order("code", {
-        ascending: true,
-      }),
+          account_type
+        ),
+        cash_category:cash_categories!cash_ledger_category_id_fkey(
+          id,
+          name,
+          category_type
+        )
+      `
+    )
+    .eq("company_id", profile.company_id)
+    .order("transaction_date", {
+      ascending: false,
+    })
+    .order("created_at", {
+      ascending: false,
+    })
+    .limit(1000),
 
-    supabase
-      .from("companies")
-      .select("name, currency")
-      .eq("id", profile.company_id)
-      .single(),
+  supabase
+    .from("accounting_accounts")
+    .select(
+      `
+        id,
+        company_id,
+        code,
+        name,
+        account_type,
+        account_subtype,
+        normal_balance,
+        system_key,
+        parent_account_id,
+        description,
+        currency_code,
+        is_system,
+        is_contra,
+        allow_manual_posting,
+        status,
+        sort_order,
+        created_at,
+        updated_at
+      `
+    )
+    .eq("company_id", profile.company_id)
+    .order("sort_order", {
+      ascending: true,
+    })
+    .order("code", {
+      ascending: true,
+    }),
 
-    getUserNotifications(user.id),
-  ]);
+  supabase
+    .from("accounting_periods")
+    .select(
+      `
+        id,
+        company_id,
+        fiscal_year_label,
+        period_number,
+        name,
+        start_date,
+        end_date,
+        status,
+        is_adjustment_period,
+        closed_at,
+        closed_by,
+        locked_at,
+        locked_by,
+        notes,
+        created_by,
+        created_at,
+        updated_at
+      `
+    )
+    .eq("company_id", profile.company_id)
+    .order("start_date", {
+  ascending: true,
+})
+    .order("period_number", {
+      ascending: true,
+    }),
+
+  supabase
+    .from("companies")
+    .select("name, currency")
+    .eq("id", profile.company_id)
+    .single(),
+
+  getUserNotifications(user.id),
+]);
 
   const transactions =
     (transactionRows || []) as unknown as CashTransaction[];
@@ -1639,6 +1998,9 @@ export default async function AccountsPage({
   accountingAccounts={
   (accountingAccountRows || []) as AccountingAccount[]
 }
+accountingPeriods={
+  (accountingPeriodRows || []) as AccountingPeriod[]
+}
   categories={(categories || []) as CashCategory[]}
   transactions={transactions}
   error={params?.error}
@@ -1650,7 +2012,19 @@ export default async function AccountsPage({
   updateCashAccount={updateCashAccount}
   archiveCashAccount={archiveCashAccount}
   restoreAccountingAccount={restoreAccountingAccount}
-  addCashTransaction={addCashTransaction}
+  createAccountingFiscalYear={
+  createAccountingFiscalYear
+}
+softCloseAccountingPeriod={
+  softCloseAccountingPeriod
+}
+reopenAccountingPeriod={
+  reopenAccountingPeriod
+}
+lockAccountingPeriod={
+  lockAccountingPeriod
+}
+addCashTransaction={addCashTransaction}
   transferCash={transferCash}
   notifications={notifications}
   userId={user.id}

@@ -5,12 +5,14 @@ import AdminShell from "@/components/admin/AdminShell";
 import type { Notification } from "@/types/notifications";
 import type {
   AccountingAccount,
+  AccountingPeriod,
   CashAccount,
   CashCategory,
   CashTransaction,
 } from "./page";
 
 import ChartOfAccountsPanel from "./ChartOfAccountsPanel";
+import AccountingPeriodsPanel from "./AccountingPeriodsPanel";
 
 type ModalType =
   | "transaction"
@@ -53,6 +55,7 @@ type Props = {
   currency: string;
   accounts: CashAccount[];
   accountingAccounts: AccountingAccount[];
+  accountingPeriods: AccountingPeriod[];
   categories: CashCategory[];
   transactions: CashTransaction[];
   error?: string;
@@ -61,6 +64,20 @@ type Props = {
   updateAccountingAccount: (formData: FormData) => void;
   archiveAccountingAccount: (formData: FormData) => void;
   restoreAccountingAccount: (formData: FormData) => void;
+  createAccountingFiscalYear: (
+  formData: FormData
+) => void;
+  softCloseAccountingPeriod: (
+  formData: FormData
+) => void;
+
+reopenAccountingPeriod: (
+  formData: FormData
+) => void;
+
+lockAccountingPeriod: (
+  formData: FormData
+) => void;
   addCashAccount: (formData: FormData) => void;
   updateCashAccount: (formData: FormData) => void;
   archiveCashAccount: (formData: FormData) => void;
@@ -78,11 +95,16 @@ export default function AccountsClient({
   updateAccountingAccount,
   archiveAccountingAccount,
   restoreAccountingAccount,
+  createAccountingFiscalYear,
+  softCloseAccountingPeriod,
+reopenAccountingPeriod,
+lockAccountingPeriod,
   companyName,
   adminName,
   currency,
   accounts,
   accountingAccounts,
+  accountingPeriods,
   categories,
   transactions,
   error,
@@ -808,6 +830,21 @@ export default function AccountsClient({
   updateAccountingAccount={updateAccountingAccount}
   archiveAccountingAccount={archiveAccountingAccount}
   restoreAccountingAccount={restoreAccountingAccount}
+/>
+<AccountingPeriodsPanel
+  periods={accountingPeriods}
+  createAccountingFiscalYear={
+    createAccountingFiscalYear
+  }
+  softCloseAccountingPeriod={
+    softCloseAccountingPeriod
+  }
+  reopenAccountingPeriod={
+    reopenAccountingPeriod
+  }
+  lockAccountingPeriod={
+    lockAccountingPeriod
+  }
 />
 
           <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
