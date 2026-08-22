@@ -62,6 +62,47 @@ export type AccountingPeriod = {
   updated_at: string;
 };
 
+export type JournalEntry = {
+  id: string;
+  company_id: string;
+  accounting_period_id: string | null;
+  entry_number: number | null;
+  entry_date: string;
+  description: string;
+  reference: string | null;
+  source_type: string;
+  source_id: string | null;
+  source_action: string | null;
+  base_currency_code: string;
+  status: "draft" | "posted" | "reversed";
+  reverses_entry_id: string | null;
+  posted_at: string | null;
+  posted_by: string | null;
+  reversed_at: string | null;
+  reversed_by: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type JournalLine = {
+  id: string;
+  company_id: string;
+  journal_entry_id: string;
+  line_number: number;
+  account_id: string;
+  description: string | null;
+  debit: number | string;
+  credit: number | string;
+  currency_code: string;
+  exchange_rate: number | string;
+  base_debit: number | string;
+  base_credit: number | string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CashCategory = {
   id: string;
   name: string;
@@ -1791,6 +1832,8 @@ export default async function AccountsPage({
   { data: transactionRows },
   { data: accountingAccountRows },
   { data: accountingPeriodRows },
+  { data: journalEntryRows },
+  { data: journalLineRows },
   { data: company },
   notifications,
 ] = await Promise.all([
@@ -1921,6 +1964,71 @@ export default async function AccountsPage({
     }),
 
   supabase
+  .from("journal_entries")
+  .select(
+    `
+      id,
+      company_id,
+      accounting_period_id,
+      entry_number,
+      entry_date,
+      description,
+      reference,
+      source_type,
+      source_id,
+      source_action,
+      base_currency_code,
+      status,
+      reverses_entry_id,
+      posted_at,
+      posted_by,
+      reversed_at,
+      reversed_by,
+      created_by,
+      created_at,
+      updated_at
+    `
+  )
+  .eq("company_id", profile.company_id)
+  .order("entry_date", {
+    ascending: false,
+  })
+  .order("created_at", {
+    ascending: false,
+  })
+  .limit(500),
+
+supabase
+  .from("journal_lines")
+  .select(
+    `
+      id,
+      company_id,
+      journal_entry_id,
+      line_number,
+      account_id,
+      description,
+      debit,
+      credit,
+      currency_code,
+      exchange_rate,
+      base_debit,
+      base_credit,
+      created_by,
+      created_at,
+      updated_at
+    `
+  )
+  .eq("company_id", profile.company_id)
+  .order("journal_entry_id", {
+    ascending: true,
+  })
+  .order("line_number", {
+    ascending: true,
+  })
+  .limit(5000),
+
+  supabase
     .from("companies")
     .select("name, currency")
     .eq("id", profile.company_id)
@@ -2000,6 +2108,12 @@ export default async function AccountsPage({
 }
 accountingPeriods={
   (accountingPeriodRows || []) as AccountingPeriod[]
+}
+journalEntries={
+  (journalEntryRows || []) as JournalEntry[]
+}
+journalLines={
+  (journalLineRows || []) as JournalLine[]
 }
   categories={(categories || []) as CashCategory[]}
   transactions={transactions}

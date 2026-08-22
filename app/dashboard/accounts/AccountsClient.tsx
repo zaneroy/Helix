@@ -9,10 +9,13 @@ import type {
   CashAccount,
   CashCategory,
   CashTransaction,
+  JournalEntry,
+  JournalLine,
 } from "./page";
 
 import ChartOfAccountsPanel from "./ChartOfAccountsPanel";
 import AccountingPeriodsPanel from "./AccountingPeriodsPanel";
+import JournalEntriesPanel from "./JournalEntriesPanel";
 
 type ModalType =
   | "transaction"
@@ -56,6 +59,8 @@ type Props = {
   accounts: CashAccount[];
   accountingAccounts: AccountingAccount[];
   accountingPeriods: AccountingPeriod[];
+  journalEntries: JournalEntry[];
+  journalLines: JournalLine[];
   categories: CashCategory[];
   transactions: CashTransaction[];
   error?: string;
@@ -105,6 +110,8 @@ lockAccountingPeriod,
   accounts,
   accountingAccounts,
   accountingPeriods,
+  journalEntries,
+  journalLines,
   categories,
   transactions,
   error,
@@ -847,7 +854,14 @@ lockAccountingPeriod,
   }
 />
 
-          <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
+<JournalEntriesPanel
+  entries={journalEntries}
+  lines={journalLines}
+  accounts={accountingAccounts}
+  periods={accountingPeriods}
+/>
+
+<section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className={`${PANEL} overflow-hidden`}>
               <div className="flex flex-col gap-4 border-b border-[color:var(--border)] p-5 xl:flex-row xl:items-end xl:justify-between">
                 <div>
