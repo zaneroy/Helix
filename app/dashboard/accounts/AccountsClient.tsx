@@ -16,6 +16,7 @@ import type {
 import ChartOfAccountsPanel from "./ChartOfAccountsPanel";
 import AccountingPeriodsPanel from "./AccountingPeriodsPanel";
 import JournalEntriesPanel from "./JournalEntriesPanel";
+import GeneralLedgerPanel from "./GeneralLedgerPanel";
 
 type ModalType =
   | "transaction"
@@ -52,6 +53,21 @@ type TopProductPoint = {
   units: number;
 };
 
+type GeneralLedgerRow = {
+  journal_entry_id: string;
+  entry_number: number;
+  entry_date: string;
+  account_code: string;
+  account_name: string;
+  journal_description: string | null;
+  reference: string | null;
+  debit: number;
+  credit: number;
+  currency_code: string | null;
+  journal_status: string;
+  posted_at: string | null;
+};
+
 type Props = {
   companyName: string;
   adminName: string;
@@ -63,6 +79,14 @@ type Props = {
   journalLines: JournalLine[];
   categories: CashCategory[];
   transactions: CashTransaction[];
+  generalLedger: GeneralLedgerRow[];
+  createJournalEntry: (
+  formData: FormData
+) => void;
+
+postJournalEntry: (
+  formData: FormData
+) => void;
   error?: string;
   success?: string;
   addAccountingAccount: (formData: FormData) => void;
@@ -104,6 +128,8 @@ export default function AccountsClient({
   softCloseAccountingPeriod,
 reopenAccountingPeriod,
 lockAccountingPeriod,
+createJournalEntry,
+postJournalEntry,
   companyName,
   adminName,
   currency,
@@ -114,6 +140,7 @@ lockAccountingPeriod,
   journalLines,
   categories,
   transactions,
+  generalLedger,
   error,
   success,
   addCashAccount,
@@ -859,6 +886,12 @@ lockAccountingPeriod,
   lines={journalLines}
   accounts={accountingAccounts}
   periods={accountingPeriods}
+  createJournalEntry={createJournalEntry}
+  postJournalEntry={postJournalEntry}
+/>
+
+<GeneralLedgerPanel
+  rows={generalLedger}
 />
 
 <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">

@@ -1,13 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
+
 import type {
   AccountingAccount,
   AccountingPeriod,
   JournalEntry,
   JournalLine,
 } from "./page";
+
 import JournalEntryDetailsModal from "./JournalEntryDetailsModal";
+import CreateJournalEntryModal from "./CreateJournalEntryModal";
 
 type StatusFilter =
   | "all"
@@ -20,6 +23,14 @@ type Props = {
   lines: JournalLine[];
   accounts: AccountingAccount[];
   periods: AccountingPeriod[];
+
+  createJournalEntry: (
+    formData: FormData
+  ) => void;
+
+  postJournalEntry: (
+    formData: FormData
+  ) => void;
 };
 
 function formatDate(value: string) {
@@ -28,7 +39,9 @@ function formatDate(value: string) {
       day: "2-digit",
       month: "short",
       year: "numeric",
-    }).format(new Date(`${value}T00:00:00`));
+    }).format(
+      new Date(`${value}T00:00:00`)
+    );
   } catch {
     return value;
   }
@@ -50,7 +63,9 @@ function formatMoney(
   }
 }
 
-function statusLabel(status: JournalEntry["status"]) {
+function statusLabel(
+  status: JournalEntry["status"]
+) {
   if (status === "posted") {
     return "Posted";
   }
@@ -62,7 +77,9 @@ function statusLabel(status: JournalEntry["status"]) {
   return "Draft";
 }
 
-function statusClasses(status: JournalEntry["status"]) {
+function statusClasses(
+  status: JournalEntry["status"]
+) {
   if (status === "posted") {
     return "border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] text-[color:var(--primary)]";
   }
@@ -79,6 +96,8 @@ export default function JournalEntriesPanel({
   lines,
   accounts,
   periods,
+  createJournalEntry,
+  postJournalEntry,
 }: Props) {
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("all");
@@ -86,15 +105,27 @@ export default function JournalEntriesPanel({
   const [search, setSearch] =
     useState("");
 
-  const [selectedEntry, setSelectedEntry] =
-    useState<JournalEntry | null>(null);
+  const [
+    selectedEntry,
+    setSelectedEntry,
+  ] = useState<JournalEntry | null>(
+    null
+  );
+
+  const [
+    createOpen,
+    setCreateOpen,
+  ] = useState(false);
 
   const linesByEntry = useMemo(() => {
-    const map = new Map<string, JournalLine[]>();
+    const map =
+      new Map<string, JournalLine[]>();
 
     for (const line of lines) {
       const current =
-        map.get(line.journal_entry_id) || [];
+        map.get(
+          line.journal_entry_id
+        ) || [];
 
       current.push(line);
 
@@ -107,55 +138,69 @@ export default function JournalEntriesPanel({
     return map;
   }, [lines]);
 
-  const visibleEntries = useMemo(() => {
-    const normalizedSearch =
-      search.trim().toLowerCase();
+  const visibleEntries =
+    useMemo(() => {
+      const normalizedSearch =
+        search
+          .trim()
+          .toLowerCase();
 
-    return entries.filter((entry) => {
-      if (
-        statusFilter !== "all" &&
-        entry.status !== statusFilter
-      ) {
-        return false;
-      }
+      return entries.filter(
+        (entry) => {
+          if (
+            statusFilter !== "all" &&
+            entry.status !==
+              statusFilter
+          ) {
+            return false;
+          }
 
-      if (!normalizedSearch) {
-        return true;
-      }
+          if (!normalizedSearch) {
+            return true;
+          }
 
-      const haystack = [
-        entry.entry_number
-          ? String(entry.entry_number)
-          : "",
-        entry.description,
-        entry.reference || "",
-        entry.source_type,
-        entry.source_action || "",
-      ]
-        .join(" ")
-        .toLowerCase();
+          const haystack = [
+            entry.entry_number
+              ? String(
+                  entry.entry_number
+                )
+              : "",
+            entry.description,
+            entry.reference || "",
+            entry.source_type,
+            entry.source_action || "",
+          ]
+            .join(" ")
+            .toLowerCase();
 
-      return haystack.includes(
-        normalizedSearch
+          return haystack.includes(
+            normalizedSearch
+          );
+        }
       );
-    });
-  }, [
-    entries,
-    search,
-    statusFilter,
-  ]);
+    }, [
+      entries,
+      search,
+      statusFilter,
+    ]);
 
-  const draftCount = entries.filter(
-    (entry) => entry.status === "draft"
-  ).length;
+  const draftCount =
+    entries.filter(
+      (entry) =>
+        entry.status === "draft"
+    ).length;
 
-  const postedCount = entries.filter(
-    (entry) => entry.status === "posted"
-  ).length;
+  const postedCount =
+    entries.filter(
+      (entry) =>
+        entry.status === "posted"
+    ).length;
 
-  const reversedCount = entries.filter(
-    (entry) => entry.status === "reversed"
-  ).length;
+  const reversedCount =
+    entries.filter(
+      (entry) =>
+        entry.status === "reversed"
+    ).length;
 
   return (
     <section className="rounded-2xl border border-[color:var(--border-brand)] bg-[image:var(--gradient-card)] shadow-[var(--shadow-card)]">
@@ -173,27 +218,38 @@ export default function JournalEntriesPanel({
             </div>
 
             <p className="mt-2 max-w-3xl text-[12px] leading-5 text-[color:var(--text-tertiary)]">
-              Journal entries are the double-entry
-              accounting records that feed the
-              authoritative General Ledger.
+              Journal entries are the
+              double-entry accounting records
+              that feed the authoritative
+              General Ledger.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-[11px]">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setCreateOpen(true)
+              }
+              className="rounded-xl bg-[color:var(--primary)] px-4 py-2.5 text-[11px] font-semibold text-white transition hover:bg-[color:var(--primary-hover)]"
+            >
+              + New Journal
+            </button>
+
             {draftCount > 0 && (
-              <span className="rounded-lg border border-[color:var(--warning-border)] bg-[color:var(--warning-soft)] px-3 py-2 text-[color:var(--warning)]">
+              <span className="rounded-lg border border-[color:var(--warning-border)] bg-[color:var(--warning-soft)] px-3 py-2 text-[11px] text-[color:var(--warning)]">
                 {draftCount} draft
               </span>
             )}
 
             {postedCount > 0 && (
-              <span className="rounded-lg border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-3 py-2 text-[color:var(--primary)]">
+              <span className="rounded-lg border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-3 py-2 text-[11px] text-[color:var(--primary)]">
                 {postedCount} posted
               </span>
             )}
 
             {reversedCount > 0 && (
-              <span className="rounded-lg border border-[color:var(--danger-border)] bg-[color:var(--danger-soft)] px-3 py-2 text-[color:var(--danger)]">
+              <span className="rounded-lg border border-[color:var(--danger-border)] bg-[color:var(--danger-soft)] px-3 py-2 text-[11px] text-[color:var(--danger)]">
                 {reversedCount} reversed
               </span>
             )}
@@ -207,30 +263,40 @@ export default function JournalEntriesPanel({
                 ["all", "All"],
                 ["draft", "Draft"],
                 ["posted", "Posted"],
-                ["reversed", "Reversed"],
+                [
+                  "reversed",
+                  "Reversed",
+                ],
               ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() =>
-                  setStatusFilter(value)
-                }
-                className={
-                  statusFilter === value
-                    ? "rounded-xl border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-3 py-2 text-[11px] font-medium text-[color:var(--primary)]"
-                    : "rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-3 py-2 text-[11px] font-medium text-[color:var(--text-secondary)]"
-                }
-              >
-                {label}
-              </button>
-            ))}
+            ).map(
+              ([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    setStatusFilter(
+                      value
+                    )
+                  }
+                  className={
+                    statusFilter ===
+                    value
+                      ? "rounded-xl border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-3 py-2 text-[11px] font-medium text-[color:var(--primary)]"
+                      : "rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-3 py-2 text-[11px] font-medium text-[color:var(--text-secondary)]"
+                  }
+                >
+                  {label}
+                </button>
+              )
+            )}
           </div>
 
           <input
             value={search}
             onChange={(event) =>
-              setSearch(event.target.value)
+              setSearch(
+                event.target.value
+              )
             }
             placeholder="Search journal entries..."
             className="w-full rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-4 py-2.5 text-[12px] text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-tertiary)] focus:border-[color:var(--border-brand)] xl:max-w-[300px]"
@@ -277,108 +343,154 @@ export default function JournalEntriesPanel({
           </thead>
 
           <tbody>
-            {visibleEntries.length > 0 ? (
-              visibleEntries.map((entry) => {
-                const entryLines =
-                  linesByEntry.get(entry.id) || [];
+            {visibleEntries.length >
+            0 ? (
+              visibleEntries.map(
+                (entry) => {
+                  const entryLines =
+                    linesByEntry.get(
+                      entry.id
+                    ) || [];
 
-                const totalDebit =
-                  entryLines.reduce(
-                    (total, line) =>
-                      total +
-                      Number(
-                        line.base_debit || 0
-                      ),
-                    0
-                  );
+                  const totalDebit =
+                    entryLines.reduce(
+                      (
+                        total,
+                        line
+                      ) =>
+                        total +
+                        Number(
+                          line.base_debit ||
+                            0
+                        ),
+                      0
+                    );
 
-                const totalCredit =
-                  entryLines.reduce(
-                    (total, line) =>
-                      total +
-                      Number(
-                        line.base_credit || 0
-                      ),
-                    0
-                  );
+                  const totalCredit =
+                    entryLines.reduce(
+                      (
+                        total,
+                        line
+                      ) =>
+                        total +
+                        Number(
+                          line.base_credit ||
+                            0
+                        ),
+                      0
+                    );
 
-                return (
-                  <tr
-                    key={entry.id}
-                    className="border-b border-[color:var(--border)] last:border-b-0 hover:bg-[color:var(--surface-soft)]"
-                  >
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <span className="font-mono text-[12px] font-semibold text-[color:var(--primary)]">
-                        {entry.entry_number
-                          ? `JE #${entry.entry_number}`
-                          : "DRAFT"}
-                      </span>
-                    </td>
+                  return (
+                    <tr
+                      key={entry.id}
+                      className="border-b border-[color:var(--border)] last:border-b-0 hover:bg-[color:var(--surface-soft)]"
+                    >
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <span className="font-mono text-[12px] font-semibold text-[color:var(--primary)]">
+                          {entry.entry_number
+                            ? `JE #${entry.entry_number}`
+                            : "DRAFT"}
+                        </span>
+                      </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-[12px] text-[color:var(--text-secondary)]">
-                      {formatDate(
-                        entry.entry_date
-                      )}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="max-w-[320px] text-[12px] font-semibold text-[color:var(--text-primary)]">
-                        {entry.description}
-                      </div>
-
-                      {entry.reference && (
-                        <div className="mt-1 text-[10px] text-[color:var(--text-tertiary)]">
-                          Ref: {entry.reference}
-                        </div>
-                      )}
-                    </td>
-
-                    <td className="whitespace-nowrap px-5 py-4 text-[11px] capitalize text-[color:var(--text-secondary)]">
-                      {entry.source_type}
-                    </td>
-
-                    <td className="whitespace-nowrap px-5 py-4 text-right text-[12px] font-medium text-[color:var(--text-primary)]">
-                      {formatMoney(
-                        totalDebit,
-                        entry.base_currency_code
-                      )}
-                    </td>
-
-                    <td className="whitespace-nowrap px-5 py-4 text-right text-[12px] font-medium text-[color:var(--text-primary)]">
-                      {formatMoney(
-                        totalCredit,
-                        entry.base_currency_code
-                      )}
-                    </td>
-
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <span
-                        className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-medium ${statusClasses(
-                          entry.status
-                        )}`}
-                      >
-                        {statusLabel(
-                          entry.status
+                      <td className="whitespace-nowrap px-5 py-4 text-[12px] text-[color:var(--text-secondary)]">
+                        {formatDate(
+                          entry.entry_date
                         )}
-                      </span>
-                    </td>
+                      </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedEntry(
-                            entry
-                          )
+                      <td className="px-5 py-4">
+                        <div className="max-w-[320px] text-[12px] font-semibold text-[color:var(--text-primary)]">
+                          {
+                            entry.description
+                          }
+                        </div>
+
+                        {entry.reference && (
+                          <div className="mt-1 text-[10px] text-[color:var(--text-tertiary)]">
+                            Ref:{" "}
+                            {
+                              entry.reference
+                            }
+                          </div>
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4 text-[11px] capitalize text-[color:var(--text-secondary)]">
+                        {
+                          entry.source_type
                         }
-                        className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-3 py-2 text-[11px] font-medium text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-brand)] hover:text-[color:var(--primary)]"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4 text-right text-[12px] font-medium text-[color:var(--text-primary)]">
+                        {formatMoney(
+                          totalDebit,
+                          entry.base_currency_code
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4 text-right text-[12px] font-medium text-[color:var(--text-primary)]">
+                        {formatMoney(
+                          totalCredit,
+                          entry.base_currency_code
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <span
+                          className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-medium ${statusClasses(
+                            entry.status
+                          )}`}
+                        >
+                          {statusLabel(
+                            entry.status
+                          )}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedEntry(
+                                entry
+                              )
+                            }
+                            className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-3 py-2 text-[11px] font-medium text-[color:var(--text-secondary)] transition hover:border-[color:var(--border-brand)] hover:text-[color:var(--primary)]"
+                          >
+                            View
+                          </button>
+
+                          {entry.status ===
+                            "draft" && (
+                            <form
+                              action={
+                                postJournalEntry
+                              }
+                            >
+                              <input
+                                type="hidden"
+                                name="journal_entry_id"
+                                value={
+                                  entry.id
+                                }
+                              />
+
+                              <button
+                                type="submit"
+                                className="rounded-lg border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-3 py-2 text-[11px] font-semibold text-[color:var(--primary)] transition hover:bg-[color:var(--primary)] hover:text-white"
+                              >
+                                Post
+                              </button>
+                            </form>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+              )
             ) : (
               <tr>
                 <td
@@ -386,12 +498,15 @@ export default function JournalEntriesPanel({
                   className="px-5 py-16 text-center"
                 >
                   <div className="text-sm font-medium text-[color:var(--text-secondary)]">
-                    No journal entries found.
+                    No journal entries
+                    found.
                   </div>
 
                   <p className="mx-auto mt-2 max-w-xl text-[11px] leading-5 text-[color:var(--text-tertiary)]">
-                    Journal entries will appear here
-                    once accounting activity begins.
+                    Create a journal draft
+                    to begin recording
+                    double-entry accounting
+                    activity.
                   </p>
                 </td>
               </tr>
@@ -402,11 +517,22 @@ export default function JournalEntriesPanel({
 
       <div className="border-t border-[color:var(--border)] px-5 py-4">
         <p className="text-[11px] text-[color:var(--text-tertiary)]">
-          Draft journals do not affect financial
-          statements. Posted and reversed journals form
-          part of the authoritative General Ledger.
+          Draft journals do not affect
+          financial statements. Posted and
+          reversed journals form part of the
+          authoritative General Ledger.
         </p>
       </div>
+
+      {createOpen && (
+        <CreateJournalEntryModal
+          accounts={accounts}
+          action={createJournalEntry}
+          onClose={() =>
+            setCreateOpen(false)
+          }
+        />
+      )}
 
       {selectedEntry && (
         <JournalEntryDetailsModal

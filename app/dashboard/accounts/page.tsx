@@ -456,6 +456,13 @@ async function addAccountingAccount(formData: FormData) {
     );
   }
 
+  const { data: generalLedgerRows } = await supabase
+  .from("general_ledger_view")
+  .select("*")
+  .eq("company_id", profile.company_id)
+  .order("entry_date", { ascending: false })
+  .order("account_code", { ascending: true });
+
   const companyCurrency = (
     await getCompanyCurrency(
       supabase,
@@ -1815,6 +1822,289 @@ async function transferCash(formData: FormData) {
   );
 }
 
+async function createJournalEntry(formData: FormData) {
+  "use server";
+
+  const { supabase, user, profile } =
+    await getAdminContext();
+
+  const entryDate = String(
+    formData.get("entry_date") || ""
+  ).trim();
+
+  const description = String(
+    formData.get("description") || ""
+  ).trim();
+
+  const reference = String(
+    formData.get("reference") || ""
+  ).trim();
+
+  const debitAccountId = String(
+    formData.get("debit_account_id") || ""
+  ).trim();
+
+  const creditAccountId = String(
+    formData.get("credit_account_id") || ""
+  ).trim();
+
+  const amount = Number(
+    formData.get("amount") || 0
+  );
+
+  if (
+    !entryDate ||
+    !description ||
+    !debitAccountId ||
+    !creditAccountId
+  ) {
+    redirect(
+      "/dashboard/accounts?error=Complete all required journal fields."
+    );
+  }
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    redirect(
+      "/dashboard/accounts?error=Journal amount must be greater than zero."
+    );
+  }
+
+  if (debitAccountId === creditAccountId) {
+    redirect(
+      "/dashboard/accounts?error=Debit and credit accounts must be different."
+    );
+  }
+
+  const { data: period, error: periodError } =
+    await supabase
+      .from("accounting_periods")
+      .select(
+        "id, start_date, end_date, status, is_adjustment_period"
+      )
+      .eq("company_id", profile.company_id)
+      .eq("status", "open")
+      .eq("is_adjustment_period", false)
+      .lte("start_date", entryDate)
+      .gte("end_date", entryDate)
+      .maybeSingle();
+
+  if (periodError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        periodError.message
+      )}`
+    );
+  }
+
+  if (!period) {
+    redirect(
+      "/dashboard/accounts?error=The journal date does not fall inside an open accounting period."
+    );
+  }
+
+  const { data: selectedAccounts, error: accountsError } =
+    await supabase
+      .from("accounting_accounts")
+      .select(
+        "id, code, name, status, allow_manual_posting"
+      )
+      .eq("company_id", profile.company_id)
+      .in("id", [
+        debitAccountId,
+        creditAccountId,
+      ]);
+
+  if (accountsError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        accountsError.message
+      )}`
+    );
+  }
+
+  if (
+    !selectedAccounts ||
+    selectedAccounts.length !== 2
+  ) {
+    redirect(
+      "/dashboard/accounts?error=One or more selected GL accounts are invalid."
+    );
+  }
+
+  const blockedAccount =
+    selectedAccounts.find(
+      (account) =>
+        account.status !== "active" ||
+        !account.allow_manual_posting
+    );
+
+  if (blockedAccount) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        `Manual journal posting is not allowed for ${blockedAccount.code} — ${blockedAccount.name}.`
+      )}`
+    );
+  }
+
+  const baseCurrency =
+    await getCompanyCurrency(
+      supabase,
+      profile.company_id
+    );
+
+  const { data: journalEntry, error: entryError } =
+    await supabase
+      .from("journal_entries")
+      .insert({
+        company_id: profile.company_id,
+        accounting_period_id: period.id,
+        entry_date: entryDate,
+        description,
+        reference: reference || null,
+        source_type: "manual",
+        source_action: "manual_entry",
+        base_currency_code: baseCurrency,
+        status: "draft",
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+  if (entryError || !journalEntry) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        entryError?.message ||
+          "Unable to create journal draft."
+      )}`
+    );
+  }
+
+  const { error: linesError } =
+    await supabase
+      .from("journal_lines")
+      .insert([
+        {
+          company_id: profile.company_id,
+          journal_entry_id: journalEntry.id,
+          line_number: 1,
+          account_id: debitAccountId,
+          description,
+          debit: amount,
+          credit: 0,
+          currency_code: baseCurrency,
+          exchange_rate: 1,
+          created_by: user.id,
+        },
+        {
+          company_id: profile.company_id,
+          journal_entry_id: journalEntry.id,
+          line_number: 2,
+          account_id: creditAccountId,
+          description,
+          debit: 0,
+          credit: amount,
+          currency_code: baseCurrency,
+          exchange_rate: 1,
+          created_by: user.id,
+        },
+      ]);
+
+  if (linesError) {
+    await supabase
+      .from("journal_entries")
+      .delete()
+      .eq("id", journalEntry.id)
+      .eq("company_id", profile.company_id)
+      .eq("status", "draft");
+
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        linesError.message
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    "/dashboard/accounts?success=Journal draft created successfully."
+  );
+}
+
+
+async function postJournalEntry(formData: FormData) {
+  "use server";
+
+  const { supabase, profile } =
+    await getAdminContext();
+
+  const journalEntryId = String(
+    formData.get("journal_entry_id") || ""
+  ).trim();
+
+  if (!journalEntryId) {
+    redirect(
+      "/dashboard/accounts?error=Journal entry ID is required."
+    );
+  }
+
+  const { data: journalEntry, error: lookupError } =
+    await supabase
+      .from("journal_entries")
+      .select(
+        "id, company_id, status, description"
+      )
+      .eq("id", journalEntryId)
+      .eq("company_id", profile.company_id)
+      .maybeSingle();
+
+  if (lookupError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        lookupError.message
+      )}`
+    );
+  }
+
+  if (!journalEntry) {
+    redirect(
+      "/dashboard/accounts?error=Journal entry not found."
+    );
+  }
+
+  if (journalEntry.status !== "draft") {
+    redirect(
+      "/dashboard/accounts?error=Only draft journals can be posted."
+    );
+  }
+
+  const { error: postError } =
+    await supabase.rpc(
+      "post_journal_entry",
+      {
+        p_journal_entry_id:
+          journalEntry.id,
+      }
+    );
+
+  if (postError) {
+    redirect(
+      `/dashboard/accounts?error=${encodeURIComponent(
+        postError.message
+      )}`
+    );
+  }
+
+  revalidateAccountsPages();
+
+  redirect(
+    "/dashboard/accounts?success=Journal posted successfully to the General Ledger."
+  );
+}
+
 export default async function AccountsPage({
   searchParams,
 }: {
@@ -1834,8 +2124,9 @@ export default async function AccountsPage({
   { data: accountingPeriodRows },
   { data: journalEntryRows },
   { data: journalLineRows },
-  { data: company },
-  notifications,
+{ data: generalLedgerRows },
+{ data: company },
+notifications,
 ] = await Promise.all([
   supabase
     .from("cash_accounts")
@@ -1991,12 +2282,15 @@ export default async function AccountsPage({
   )
   .eq("company_id", profile.company_id)
   .order("entry_date", {
-    ascending: false,
-  })
-  .order("created_at", {
-    ascending: false,
-  })
-  .limit(500),
+  ascending: true,
+})
+.order("entry_number", {
+  ascending: true,
+  nullsFirst: false,
+})
+.order("created_at", {
+  ascending: true,
+}),
 
 supabase
   .from("journal_lines")
@@ -2027,6 +2321,20 @@ supabase
     ascending: true,
   })
   .limit(5000),
+
+  supabase
+  .from("general_ledger_view")
+  .select("*")
+  .eq("company_id", profile.company_id)
+  .order("entry_date", {
+    ascending: true,
+  })
+  .order("entry_number", {
+    ascending: true,
+  })
+  .order("line_number", {
+    ascending: true,
+  }),
 
   supabase
     .from("companies")
@@ -2114,6 +2422,11 @@ journalEntries={
 }
 journalLines={
   (journalLineRows || []) as JournalLine[]
+}
+createJournalEntry={createJournalEntry}
+postJournalEntry={postJournalEntry}
+generalLedger={
+  generalLedgerRows || []
 }
   categories={(categories || []) as CashCategory[]}
   transactions={transactions}
