@@ -159,9 +159,9 @@ export default function AccountingPeriodsPanel({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="max-h-[520px] overflow-auto overscroll-contain">
         <table className="w-full min-w-[1180px] border-collapse text-left">
-          <thead className="bg-[color:var(--surface-soft)] text-[10px] uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">
+          <thead className="sticky top-0 z-10 bg-[color:var(--surface-soft)] text-[10px] uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">
             <tr className="border-b border-[color:var(--border)]">
               <th className="px-5 py-4">
                 Fiscal Year

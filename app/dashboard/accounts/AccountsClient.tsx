@@ -17,6 +17,9 @@ import ChartOfAccountsPanel from "./ChartOfAccountsPanel";
 import AccountingPeriodsPanel from "./AccountingPeriodsPanel";
 import JournalEntriesPanel from "./JournalEntriesPanel";
 import GeneralLedgerPanel from "./GeneralLedgerPanel";
+import TrialBalancePanel from "./TrialBalancePanel";
+import ProfitLossPanel from "./ProfitLossPanel";
+import BalanceSheetPanel from "./BalanceSheetPanel";
 
 type ModalType =
   | "transaction"
@@ -892,6 +895,22 @@ postJournalEntry,
 
 <GeneralLedgerPanel
   rows={generalLedger}
+/>
+
+<TrialBalancePanel
+  rows={generalLedger}
+/>
+
+<ProfitLossPanel
+  rows={generalLedger}
+  accounts={accountingAccounts}
+  currency={currency}
+/>
+
+<BalanceSheetPanel
+  rows={generalLedger}
+  accounts={accountingAccounts}
+  currency={currency}
 />
 
 <section className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_320px]">

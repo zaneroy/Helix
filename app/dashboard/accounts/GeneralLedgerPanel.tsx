@@ -242,11 +242,11 @@ totals.debit - totals.credit
 </div>
 
 
-<div className="overflow-x-auto">
+<div className="max-h-[520px] overflow-auto overscroll-contain">
 
 <table className="w-full min-w-[1200px]">
 
-<thead className="bg-[color:var(--surface-soft)]">
+<thead className="sticky top-0 z-10 bg-[color:var(--surface-soft)] text-[10px] uppercase tracking-[0.12em] text-[color:var(--text-tertiary)]">
 
 <tr>
 
