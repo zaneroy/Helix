@@ -20,6 +20,7 @@ import GeneralLedgerPanel from "./GeneralLedgerPanel";
 import TrialBalancePanel from "./TrialBalancePanel";
 import ProfitLossPanel from "./ProfitLossPanel";
 import BalanceSheetPanel from "./BalanceSheetPanel";
+import CashFlowStatementPanel from "./CashFlowStatementPanel";
 
 type ModalType =
   | "transaction"
@@ -908,6 +909,12 @@ postJournalEntry,
 />
 
 <BalanceSheetPanel
+  rows={generalLedger}
+  accounts={accountingAccounts}
+  currency={currency}
+/>
+
+<CashFlowStatementPanel
   rows={generalLedger}
   accounts={accountingAccounts}
   currency={currency}
