@@ -7,6 +7,7 @@ import { getUserNotifications } from "@/lib/notifications/server";
 import { emitEvent } from "@/lib/events/emitEvent";
 
 import ExpensesClient from "./ExpensesClient";
+import { postExpenseToGeneralLedger } from "@/lib/accounting/postExpenseToGeneralLedger";
 
 export type ExpenseSubmitter = {
   id: string;
@@ -49,6 +50,7 @@ type ExpenseDecision = "approved" | "rejected";
 type CashAccountRow = {
   id: string;
   name: string;
+  account_type: string;
   currency: string;
 };
 
@@ -186,7 +188,7 @@ async function getExpenseCashAccount(
   if (requestedAccountId) {
     const { data: requestedAccount } = await supabase
       .from("cash_accounts")
-      .select("id, name, currency")
+      .select("id, name, account_type, currency")
       .eq("id", requestedAccountId)
       .eq("company_id", companyId)
       .eq("status", "active")
@@ -199,7 +201,7 @@ async function getExpenseCashAccount(
 
   const { data: defaultAccount } = await supabase
     .from("cash_accounts")
-    .select("id, name, currency")
+    .select("id, name, account_type, currency")
     .eq("company_id", companyId)
     .eq("status", "active")
     .order("created_at", { ascending: true })
@@ -617,6 +619,81 @@ async function addExpense(formData: FormData) {
       )}`
     );
   }
+
+  try {
+  await postExpenseToGeneralLedger({
+    supabase,
+    companyId:
+      profile.company_id,
+    userId: user.id,
+    expenseId:
+      createdExpense.id,
+    expenseDate:
+      normalizeExpenseDate(
+        createdExpense.expense_date
+      ),
+    expenseName:
+      getExpenseName(
+        createdExpense
+      ),
+    category:
+      createdExpense.category,
+    payee:
+      createdExpense.payee,
+    amount:
+      Number(
+        createdExpense.amount || 0
+      ),
+    paymentAccountType:
+      account.account_type,
+    paymentAccountName:
+      account.name,
+    paymentAccountCurrency:
+      account.currency,
+  });
+} catch (accountingError) {
+  /*
+   * Do not leave an operational expense
+   * behind if accounting failed.
+   */
+
+  if (ledgerResult.entryId) {
+    await supabase
+      .from("cash_ledger")
+      .delete()
+      .eq(
+        "id",
+        ledgerResult.entryId
+      )
+      .eq(
+        "company_id",
+        profile.company_id
+      );
+  }
+
+  await supabase
+    .from("expenses")
+    .delete()
+    .eq(
+      "id",
+      createdExpense.id
+    )
+    .eq(
+      "company_id",
+      profile.company_id
+    );
+
+  const message =
+    accountingError instanceof Error
+      ? accountingError.message
+      : "Unknown accounting posting error.";
+
+  redirect(
+    `/dashboard/expenses?error=${encodeURIComponent(
+      `The expense was not saved because its General Ledger posting failed: ${message}`
+    )}`
+  );
+}
 
   const currency = account.currency;
   const expenseName = getExpenseName(createdExpense);

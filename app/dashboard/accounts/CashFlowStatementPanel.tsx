@@ -12,6 +12,7 @@ type GeneralLedgerRow = {
   credit: number;
   base_debit?: number;
   base_credit?: number;
+  source_type?: string | null;
 };
 
 type Props = {
@@ -392,6 +393,18 @@ export default function CashFlowStatementPanel({
         ) {
           continue;
         }
+
+        if (
+  journalRows[0]?.source_type === "sale" &&
+  (
+    account?.system_key ===
+      "cost_of_goods_sold" ||
+    account?.system_key ===
+      "inventory_asset"
+  )
+) {
+  continue;
+}
 
         const debit = Number(
           row.base_debit ??
