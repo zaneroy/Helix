@@ -5,6 +5,7 @@ import SalesClient from "./SalesClient";
 import type { Sale } from "./SalesClient";
 import { getUserNotifications } from "@/lib/notifications/server";
 import { emitEvent } from "@/lib/events/emitEvent";
+import { postSaleToGeneralLedger } from "@/lib/accounting/postSaleToGeneralLedger";
 
 
 export type ImportedSaleRow = {
@@ -379,6 +380,78 @@ async function recordSale(formData: FormData) {
       )}`
     );
   }
+
+  try {
+  await postSaleToGeneralLedger({
+    supabase,
+    companyId:
+      profile.company_id,
+    userId: user.id,
+    saleId: createdSale.id,
+    saleDate: soldAt,
+    productName,
+    quantity,
+    unitCost,
+    totalAmount,
+  });
+} catch (accountingError) {
+  /*
+   * The operational sale must not survive
+   * when its accounting posting fails.
+   */
+
+  await supabase
+    .from("cash_ledger")
+    .delete()
+    .eq(
+      "company_id",
+      profile.company_id
+    )
+    .eq("source_type", "sale")
+    .eq(
+      "source_id",
+      createdSale.id
+    );
+
+  await supabase
+    .from("products")
+    .update({
+      quantity_sold:
+        currentSold,
+      quantity_on_hand:
+        currentOnHand,
+      stock_quantity:
+        currentOnHand,
+    })
+    .eq("id", productId)
+    .eq(
+      "company_id",
+      profile.company_id
+    );
+
+  await supabase
+    .from("sales")
+    .delete()
+    .eq(
+      "id",
+      createdSale.id
+    )
+    .eq(
+      "company_id",
+      profile.company_id
+    );
+
+  const message =
+    accountingError instanceof Error
+      ? accountingError.message
+      : "Unknown accounting posting error.";
+
+  redirect(
+    `/dashboard/sales?error=${encodeURIComponent(
+      `The sale was not recorded because its General Ledger posting failed: ${message}`
+    )}`
+  );
+}
 
   await emitEvent({
     companyId: profile.company_id,
