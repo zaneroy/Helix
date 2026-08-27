@@ -10,10 +10,10 @@ type PostSaleToGeneralLedgerInput = {
   quantity: number;
   unitCost: number;
   totalAmount: number;
+  paymentAccountingAccountId: string;
 };
 
 const SALE_ACCOUNT_KEYS = [
-  "cash_and_cash_equivalents",
   "sales_revenue",
   "inventory_asset",
   "cost_of_goods_sold",
@@ -57,9 +57,10 @@ export async function postSaleToGeneralLedger({
   quantity,
   unitCost,
   totalAmount,
+  paymentAccountingAccountId,
 }: PostSaleToGeneralLedgerInput) {
   const entryDate =
-    saleDate.slice(0, 10);
+    String(saleDate).slice(0, 10);
 
   const saleReference =
     `SALE-${saleId
@@ -73,7 +74,9 @@ export async function postSaleToGeneralLedger({
     );
 
   const saleValue =
-    roundMoney(totalAmount);
+    roundMoney(
+      Number(totalAmount)
+    );
 
   if (
     !Number.isFinite(saleValue) ||
@@ -84,16 +87,24 @@ export async function postSaleToGeneralLedger({
     );
   }
 
+  if (!paymentAccountingAccountId) {
+    throw new Error(
+      "The selected financial account is not linked to the General Ledger."
+    );
+  }
+
   /*
-   * Protect against the same sale being
-   * posted to accounting more than once.
+   * Prevent the same operational sale from
+   * being posted to accounting more than once.
    */
   const {
     data: existingJournal,
     error: existingJournalError,
   } = await supabase
     .from("journal_entries")
-    .select("id, status, entry_number")
+    .select(
+      "id, status, entry_number"
+    )
     .eq("company_id", companyId)
     .eq("source_type", "sale")
     .eq("source_id", saleId)
@@ -129,6 +140,7 @@ export async function postSaleToGeneralLedger({
     companyResult,
     periodResult,
     accountResult,
+    paymentAccountResult,
   ] = await Promise.all([
     supabase
       .from("companies")
@@ -167,6 +179,18 @@ export async function postSaleToGeneralLedger({
         "system_key",
         [...SALE_ACCOUNT_KEYS]
       ),
+
+    supabase
+      .from("accounting_accounts")
+      .select(
+        "id, code, name, account_type, account_subtype, currency_code, status"
+      )
+      .eq(
+        "id",
+        paymentAccountingAccountId
+      )
+      .eq("company_id", companyId)
+      .maybeSingle(),
   ]);
 
   if (
@@ -195,6 +219,43 @@ export async function postSaleToGeneralLedger({
     );
   }
 
+  if (
+    paymentAccountResult.error ||
+    !paymentAccountResult.data
+  ) {
+    throw new Error(
+      paymentAccountResult.error?.message ||
+        "The selected financial account is not linked to a valid General Ledger account."
+    );
+  }
+
+  const paymentAccount =
+    paymentAccountResult.data;
+
+  if (
+    paymentAccount.status !== "active"
+  ) {
+    throw new Error(
+      `${paymentAccount.code} — ${paymentAccount.name} must be active before sales can post to accounting.`
+    );
+  }
+
+  /*
+   * Sales receipts must go into an asset account:
+   * bank, cash, petty cash, processor, etc.
+   *
+   * A credit-card or loan liability should not
+   * be used as the destination for sale proceeds.
+   */
+  if (
+    paymentAccount.account_type !==
+    "asset"
+  ) {
+    throw new Error(
+      `${paymentAccount.code} — ${paymentAccount.name} cannot receive sales because its General Ledger account is not an asset account.`
+    );
+  }
+
   const accountingAccounts =
     accountResult.data || [];
 
@@ -206,11 +267,6 @@ export async function postSaleToGeneralLedger({
           account,
         ]
       )
-    );
-
-  const cashAccount =
-    accountBySystemKey.get(
-      "cash_and_cash_equivalents"
     );
 
   const salesRevenueAccount =
@@ -229,7 +285,6 @@ export async function postSaleToGeneralLedger({
     );
 
   if (
-    !cashAccount ||
     !salesRevenueAccount ||
     !inventoryAccount ||
     !cogsAccount
@@ -241,7 +296,7 @@ export async function postSaleToGeneralLedger({
 
   const blockedAccount =
     [
-      cashAccount,
+      paymentAccount,
       salesRevenueAccount,
       inventoryAccount,
       cogsAccount,
@@ -260,7 +315,31 @@ export async function postSaleToGeneralLedger({
     String(
       companyResult.data.currency ||
         "GBP"
-    ).toUpperCase();
+    )
+      .trim()
+      .toUpperCase();
+
+  const paymentAccountCurrency =
+    String(
+      paymentAccount.currency_code ||
+        baseCurrency
+    )
+      .trim()
+      .toUpperCase();
+
+  /*
+   * Until multi-currency accounting is connected,
+   * the destination GL account must use the company
+   * base currency.
+   */
+  if (
+    paymentAccountCurrency !==
+    baseCurrency
+  ) {
+    throw new Error(
+      `Automatic sale posting currently requires the selected financial account currency (${paymentAccountCurrency}) to match the company base currency (${baseCurrency}).`
+    );
+  }
 
   const {
     data: journalEntry,
@@ -299,9 +378,9 @@ export async function postSaleToGeneralLedger({
 
   const journalLines = [
     /*
-     * Revenue side
+     * Sale proceeds:
      *
-     * Dr Cash
+     * Dr Exact selected bank/cash GL account
      * Cr Product Sales
      */
     {
@@ -310,9 +389,9 @@ export async function postSaleToGeneralLedger({
         journalEntry.id,
       line_number: 1,
       account_id:
-        cashAccount.id,
+        paymentAccount.id,
       description:
-        `Cash received for ${quantity} × ${productName}`,
+        `Received into ${paymentAccount.name} for ${quantity} × ${productName}`,
       debit: saleValue,
       credit: 0,
       currency_code:
@@ -340,11 +419,12 @@ export async function postSaleToGeneralLedger({
   ];
 
   /*
-   * If inventory actually has a cost,
-   * automatically recognize COGS.
+   * Inventory cost recognition:
    *
    * Dr Cost of Goods Sold
    * Cr Inventory
+   *
+   * This is a non-cash accounting movement.
    */
   if (costOfGoodsSold > 0) {
     journalLines.push(

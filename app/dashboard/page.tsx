@@ -13,6 +13,7 @@ type MoneyRow = {
   created_at?: string | null;
   sold_at?: string | null;
   expense_date?: string | null;
+  status?: string | null;
   category?: string | null;
   title?: string | null;
   description?: string | null;
@@ -105,13 +106,20 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
   const productRows = (products || []) as ProductRow[];
   const saleRows = (sales || []) as MoneyRow[];
   const expenseRows = (expenses || []) as MoneyRow[];
+
+  // Only financially recognized expenses should affect dashboard totals.
+  // Founder/company expenses normally have no pending review state and count.
+  // Employee claims count only after approval; pending/submitted/rejected claims
+  // remain visible in the Expenses module but do not affect financial metrics.
+  const recognizedExpenseRows = expenseRows.filter(isRecognizedExpense);
+
   const cashAccountRows = (cashAccounts || []) as CashAccountRow[];
   const cashTransactionRows =
     (cashTransactions || []) as CashTransactionRow[];
 
   const totalRevenue = sum(saleRows, "total_amount");
   const grossProfit = sum(saleRows, "profit_amount");
-  const totalExpenses = sum(expenseRows, "amount");
+  const totalExpenses = sum(recognizedExpenseRows, "amount");
   const netProfit = grossProfit - totalExpenses;
 
   const accountBalanceMap = new Map<string, number>();
@@ -165,10 +173,10 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
   const inventoryValue = productRows.reduce((total, product) => total + Number(product.quantity_on_hand || product.stock_quantity || 0) * deriveUnitCost(product), 0);
   const lowStock = productRows.filter((p) => Number(p.quantity_on_hand || p.stock_quantity || 0) <= Number(p.low_stock_limit || 0));
   const outOfStock = productRows.filter((p) => Number(p.quantity_on_hand || p.stock_quantity || 0) <= 0);
-  const performanceData = getPerformanceData(saleRows, expenseRows, period);
-  const recentActivity = [...saleRows, ...expenseRows].sort((a,b) => new Date(b.sold_at || b.expense_date || b.created_at || "").getTime() - new Date(a.sold_at || a.expense_date || a.created_at || "").getTime()).slice(0,6);
+  const performanceData = getPerformanceData(saleRows, recognizedExpenseRows, period);
+  const recentActivity = [...saleRows, ...recognizedExpenseRows].sort((a,b) => new Date(b.sold_at || b.expense_date || b.created_at || "").getTime() - new Date(a.sold_at || a.expense_date || a.created_at || "").getTime()).slice(0,6);
   const topProducts = getTopProducts(saleRows, productRows);
-  const expenseBreakdown = getExpenseBreakdown(expenseRows);
+  const expenseBreakdown = getExpenseBreakdown(recognizedExpenseRows);
   const supplierExposure = getSupplierExposure(productRows);
   const businessHealth = calculateBusinessHealth({ totalRevenue, grossProfit, totalExpenses, netProfit, products: productRows.length, lowStock: lowStock.length, outOfStock: outOfStock.length });
   const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
@@ -313,7 +321,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
             <KpiCard
               label="Operating Expenses"
               value={formatMoney(totalExpenses, currency)}
-              note={`${expenseRows.length} recorded expenses`}
+              note={`${recognizedExpenseRows.length} recognized expenses`}
               comparison={formatChange(expenseChange)}
               comparisonPositive={expenseChange <= 0}
               tone={expenseChange <= 0 ? "violet" : "red"}
@@ -373,7 +381,7 @@ export default async function DashboardPage({ searchParams }: { searchParams?: P
               <SummaryCard
                 label="Expenses"
                 value={formatMoney(totalExpenses, currency)}
-                note={`${expenseRows.length} recorded expenses`}
+                note={`${recognizedExpenseRows.length} recognized expenses`}
                 href="/dashboard/expenses"
               />
               <SummaryCard
@@ -922,6 +930,12 @@ function buildExecutiveBrief({
   });
 
   return brief.slice(0, 6);
+}
+
+function isRecognizedExpense(expense: MoneyRow) {
+  const status = String(expense.status || "").trim().toLowerCase();
+
+  return !["pending", "submitted", "rejected"].includes(status);
 }
 
 function sum(rows:MoneyRow[],key:keyof MoneyRow){return rows.reduce((t,r)=>t+Number(r[key]||0),0)}

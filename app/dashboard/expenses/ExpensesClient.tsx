@@ -20,7 +20,6 @@ import type {
   ImportedExpenseRow,
 } from "./page";
 
-type ExpenseDecision = "approved" | "rejected";
 type ExpenseStatusFilter = "all" | "operating" | "submitted" | "approved" | "rejected";
 
 const PANEL = "rounded-2xl border border-[color:var(--border-brand)] bg-[image:var(--gradient-card)] shadow-[var(--shadow-card)]";
@@ -33,14 +32,6 @@ export type ExpenseCashAccount = {
   status: string;
   balance: number;
 };
-
-type ReviewRequest = {
-  id: string;
-  decision: ExpenseDecision;
-  title: string;
-  employeeName: string;
-};
-
 
 type Props = {
   expenses: Expense[];
@@ -86,6 +77,47 @@ const paymentMethods = [
   "Other",
 ];
 
+function parseExpenseDate(
+  value: string | null | undefined
+) {
+  if (!value) {
+    return null;
+  }
+
+  const raw = String(value).trim();
+
+  /*
+   * Date-only database values such as 2026-08-25
+   * must be treated as a local calendar date,
+   * not UTC midnight.
+   */
+  const dateOnlyMatch = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})/
+  );
+
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+
+    return new Date(
+      year,
+      month - 1,
+      day,
+      12,
+      0,
+      0,
+      0
+    );
+  }
+
+  const parsed = new Date(raw);
+
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : parsed;
+}
+
 export default function ExpensesClient({
   expenses,
   accounts,
@@ -94,7 +126,6 @@ export default function ExpensesClient({
   addExpense,
   importExpenses,
   updateExpense,
-  reviewEmployeeExpense,
   deleteExpense,
   adminName,
   currency,
@@ -109,11 +140,6 @@ export default function ExpensesClient({
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(
     null
   );
-  const [reviewRequest, setReviewRequest] =
-    useState<ReviewRequest | null>(null);
-  const [approvalAccountId, setApprovalAccountId] = useState("");
-  const [reviewError, setReviewError] = useState("");
-
   const money = createCurrencyFormatter(currency);
 
   const activeAccounts = useMemo(
@@ -126,12 +152,25 @@ export default function ExpensesClient({
       expenses.map((expense) => ({
         ...expense,
         numericAmount: Number(expense.amount || 0),
-        expenseDateValue: expense.expense_date
-          ? new Date(expense.expense_date)
-          : null,
+        expenseDateValue:
+  parseExpenseDate(
+    expense.expense_date
+  ),
         isEmployeeClaim: expense.submitted_by?.role === "employee",
       })),
     [expenses]
+  );
+
+  const recognizedExpenses = useMemo(
+    () =>
+      normalizedExpenses.filter((expense) => {
+        if (!expense.isEmployeeClaim) {
+          return true;
+        }
+
+        return String(expense.status || "").toLowerCase() === "approved";
+      }),
+    [normalizedExpenses]
   );
 
   const router = useRouter();
@@ -151,9 +190,21 @@ export default function ExpensesClient({
 
     return normalizedExpenses.filter((expense) => {
       const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "operating" && !expense.isEmployeeClaim) ||
-        (expense.isEmployeeClaim && expense.status === statusFilter);
+  statusFilter === "all" ||
+  (statusFilter === "operating" && !expense.isEmployeeClaim) ||
+  (
+    statusFilter === "submitted" &&
+    expense.isEmployeeClaim &&
+    ["submitted", "pending"].includes(
+      String(expense.status || "").toLowerCase()
+    )
+  ) ||
+  (
+    statusFilter !== "submitted" &&
+    statusFilter !== "operating" &&
+    expense.isEmployeeClaim &&
+    expense.status === statusFilter
+  );
 
       if (!matchesStatus) return false;
       if (!query) return true;
@@ -173,34 +224,37 @@ export default function ExpensesClient({
     });
   }, [normalizedExpenses, search, statusFilter]);
 
-  const totalExpenses = normalizedExpenses.reduce(
+  const totalExpenses = recognizedExpenses.reduce(
     (total, expense) => total + expense.numericAmount,
     0
   );
 
   const currentMonthExpenses = useMemo(() => {
     const now = new Date();
-    return normalizedExpenses
+    return recognizedExpenses
       .filter((expense) =>
         expense.expenseDateValue &&
         expense.expenseDateValue.getFullYear() === now.getFullYear() &&
         expense.expenseDateValue.getMonth() === now.getMonth()
       )
       .reduce((sum, expense) => sum + expense.numericAmount, 0);
-  }, [normalizedExpenses]);
+  }, [recognizedExpenses]);
 
   const submittedClaims = normalizedExpenses.filter(
-    (expense) =>
-      expense.status === "submitted" && expense.isEmployeeClaim
-  ).length;
+  (expense) =>
+    expense.isEmployeeClaim &&
+    ["submitted", "pending"].includes(
+      String(expense.status || "").toLowerCase()
+    )
+).length;
 
   const uniqueCategories = new Set(
-    normalizedExpenses.map((expense) => expense.category).filter(Boolean)
+    recognizedExpenses.map((expense) => expense.category).filter(Boolean)
   ).size;
 
   const expenseTrend = useMemo(() => {
     const months = new Map<string, { date: Date; amount: number }>();
-    normalizedExpenses.forEach((expense) => {
+    recognizedExpenses.forEach((expense) => {
       if (!expense.expenseDateValue) return;
       const d = expense.expenseDateValue;
       const key = `${d.getFullYear()}-${d.getMonth()}`;
@@ -218,11 +272,11 @@ export default function ExpensesClient({
         label: item.date.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
         value: item.amount,
       }));
-  }, [normalizedExpenses]);
+  }, [recognizedExpenses]);
 
   const categoryTotals = useMemo(() => {
     const map = new Map<string, number>();
-    normalizedExpenses.forEach((expense) => {
+    recognizedExpenses.forEach((expense) => {
       const name = expense.category || "Other";
       map.set(name, (map.get(name) || 0) + expense.numericAmount);
     });
@@ -230,11 +284,11 @@ export default function ExpensesClient({
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [normalizedExpenses]);
+  }, [recognizedExpenses]);
 
   const vendorTotals = useMemo(() => {
     const map = new Map<string, number>();
-    normalizedExpenses.forEach((expense) => {
+    recognizedExpenses.forEach((expense) => {
       const name = expense.payee || "Unspecified payee";
       map.set(name, (map.get(name) || 0) + expense.numericAmount);
     });
@@ -242,7 +296,7 @@ export default function ExpensesClient({
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
-  }, [normalizedExpenses]);
+  }, [recognizedExpenses]);
 
   const pageSize = 8;
   const totalPages = Math.max(1, Math.ceil(filteredExpenses.length / pageSize));
@@ -324,9 +378,22 @@ export default function ExpensesClient({
           {success && <div className="rounded-xl border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-4 py-3 text-sm text-[color:var(--primary)]">{success}</div>}
 
           <section className="grid gap-5 md:grid-cols-2 2xl:grid-cols-4">
-            <ExpenseMetricCard label="Total Expenses" value={money(totalExpenses)} note={`${expenses.length} recorded expenses`} tone="red" data={expenseTrend.map((p) => p.value)} />
+            <ExpenseMetricCard label="Total Expenses" value={money(totalExpenses)} note={`${recognizedExpenses.length} recognized expenses`} tone="red" data={expenseTrend.map((p) => p.value)} />
             <ExpenseMetricCard label="This Month" value={money(currentMonthExpenses)} note="Current month operating spend" tone="orange" data={expenseTrend.map((p) => p.value)} />
-            <ExpenseMetricCard label="Pending Review" value={String(submittedClaims)} note="Employee claims awaiting a decision" tone="yellow" data={normalizedExpenses.map((e) => e.status === "submitted" ? 1 : 0)} />
+            <ExpenseMetricCard
+              label="Pending Review"
+              value={String(submittedClaims)}
+              note="Employee claims awaiting a decision"
+              tone="yellow"
+              data={normalizedExpenses.map((expense) =>
+                expense.isEmployeeClaim &&
+                ["submitted", "pending"].includes(
+                  String(expense.status || "").toLowerCase()
+                )
+                  ? 1
+                  : 0
+              )}
+            />
             <ExpenseMetricCard label="Categories Used" value={String(uniqueCategories)} note="Spending classifications in use" tone="violet" data={categoryTotals.map((c) => c.value)} />
           </section>
 
@@ -340,7 +407,7 @@ export default function ExpensesClient({
             <div className="text-sm font-semibold">Quick Actions</div>
             <div className="mt-4 divide-y divide-[color:var(--divider)]">
               <QuickExpenseAction title="Add Expense" description="Record a new company cost" tone="cyan" onClick={() => setAdding(true)} />
-              <QuickExpenseAction title="Review Claims" description="Show employee expenses awaiting review" tone="yellow" onClick={() => { setStatusFilter("submitted"); setCurrentPage(1); document.getElementById("expense-register")?.scrollIntoView({ behavior: "smooth" }); }} />
+              <QuickExpenseAction title="Pending Claims" description="Show employee claims waiting for approval" tone="yellow" onClick={() => { setStatusFilter("submitted"); setCurrentPage(1); document.getElementById("expense-register")?.scrollIntoView({ behavior: "smooth" }); }} />
               <QuickExpenseAction title="Export Expenses" description="Download the current filtered records" tone="blue" onClick={exportExpenses} />
               <QuickExpenseAction title="View Categories" description={`${uniqueCategories} categories currently in use`} tone="violet" onClick={() => document.getElementById("expense-analytics")?.scrollIntoView({ behavior: "smooth" })} />
             </div>
@@ -364,24 +431,109 @@ export default function ExpensesClient({
                 <thead className="bg-[color:var(--surface-soft)] text-[10px] uppercase tracking-[0.14em] text-[color:var(--text-tertiary)]"><tr className="border-b border-[color:var(--border)]"><th className="px-5 py-4">Title</th><th className="px-5 py-4">Submitted By</th><th className="px-5 py-4">Category</th><th className="px-5 py-4">Amount</th><th className="px-5 py-4">Payee</th><th className="px-5 py-4">Method</th><th className="px-5 py-4">Date</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Actions</th></tr></thead>
                 <tbody>
                   {paginatedExpenses.length ? paginatedExpenses.map((expense) => {
-                    const canReview = expense.isEmployeeClaim && expense.status === "submitted";
-                    const employeeName = expense.submitted_by?.full_name || expense.submitted_by?.email || "Employee";
-                    return <tr key={expense.id} className="border-b border-[color:var(--border)] text-[12px] last:border-b-0 hover:bg-[color:var(--surface-soft)]">
-                      <td className="px-5 py-4"><p className="font-medium text-[color:var(--text-primary)]">{expense.title || "Expense"}</p><p className="mt-1 max-w-[220px] truncate text-[10px] text-[color:var(--text-muted)]">{expense.notes || "No notes"}</p></td>
-                      <td className="px-5 py-4"><p className="text-[color:var(--text-secondary)]">{expense.submitted_by?.full_name || expense.submitted_by?.email || "System"}</p><p className="mt-1 text-[10px] text-[color:var(--text-muted)]">{expense.isEmployeeClaim ? "Employee claim" : "Founder expense"}</p></td>
-                      <td className="px-5 py-4"><span className="rounded-lg border border-[color:var(--violet-border)] bg-[color:var(--violet-soft)] px-2.5 py-1 text-[10px] text-[color:var(--chart-5)]">{expense.category || "Other"}</span></td>
-                      <td className="px-5 py-4 font-medium text-[color:var(--danger)]">{money(expense.numericAmount)}</td><td className="px-5 py-4 text-[color:var(--text-secondary)]">{expense.payee || "—"}</td><td className="px-5 py-4 text-[color:var(--text-secondary)]">{expense.payment_method || "—"}</td><td className="px-5 py-4 text-[color:var(--text-tertiary)]">{formatExpenseDate(expense.expense_date)}</td>
-                      <td className="px-5 py-4"><ExpenseStatusBadge status={expense.status} isEmployeeClaim={expense.isEmployeeClaim} /></td>
-                      <td className="px-5 py-4"><div className="flex items-center gap-2">{canReview && <><button type="button" onClick={() => { setApprovalAccountId(""); setReviewError(""); setReviewRequest({ id: expense.id, decision: "approved", title: expense.title || "Expense", employeeName }); }} className="rounded-lg border border-[color:var(--success-border)] bg-[color:var(--success-soft)] px-3 py-2 text-[10px] text-[color:var(--success)]">Approve</button><button type="button" onClick={() => { setApprovalAccountId(""); setReviewError(""); setReviewRequest({ id: expense.id, decision: "rejected", title: expense.title || "Expense", employeeName }); }} className="rounded-lg border border-[color:var(--danger-border)] bg-[color:var(--danger-soft)] px-3 py-2 text-[10px] text-[color:var(--danger)]">Reject</button></>}<button type="button" onClick={() => setEditing(expense)} className="rounded-lg border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-3 py-2 text-[10px] text-[color:var(--primary)]">Edit</button></div></td>
-                    </tr>;
-                  }) : <tr><td colSpan={9} className="px-5 py-16 text-center text-sm text-[color:var(--text-tertiary)]">No matching expenses found.</td></tr>}
+                    const waitingForApproval =
+                      expense.isEmployeeClaim &&
+                      ["submitted", "pending"].includes(
+                        String(expense.status || "").toLowerCase()
+                      );
+
+                    return (
+                      <tr
+                        key={expense.id}
+                        className="border-b border-[color:var(--border)] text-[12px] last:border-b-0 hover:bg-[color:var(--surface-soft)]"
+                      >
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-[color:var(--text-primary)]">
+                            {expense.title || "Expense"}
+                          </p>
+                          <p className="mt-1 max-w-[220px] truncate text-[10px] text-[color:var(--text-muted)]">
+                            {expense.notes || "No notes"}
+                          </p>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <p className="text-[color:var(--text-secondary)]">
+                            {expense.submitted_by?.full_name ||
+                              expense.submitted_by?.email ||
+                              "System"}
+                          </p>
+                          <p className="mt-1 text-[10px] text-[color:var(--text-muted)]">
+                            {expense.isEmployeeClaim
+                              ? "Employee claim"
+                              : "Founder expense"}
+                          </p>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span className="rounded-lg border border-[color:var(--violet-border)] bg-[color:var(--violet-soft)] px-2.5 py-1 text-[10px] text-[color:var(--chart-5)]">
+                            {expense.category || "Other"}
+                          </span>
+                        </td>
+
+                        <td className="px-5 py-4 font-medium text-[color:var(--danger)]">
+                          {money(expense.numericAmount)}
+                        </td>
+
+                        <td className="px-5 py-4 text-[color:var(--text-secondary)]">
+                          {expense.payee || "—"}
+                        </td>
+
+                        <td className="px-5 py-4 text-[color:var(--text-secondary)]">
+                          {expense.payment_method || "—"}
+                        </td>
+
+                        <td className="px-5 py-4 text-[color:var(--text-tertiary)]">
+                          {formatExpenseDate(expense.expense_date)}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <ExpenseStatusBadge
+                            status={expense.status}
+                            isEmployeeClaim={expense.isEmployeeClaim}
+                          />
+                        </td>
+
+                        <td className="px-5 py-4">
+                          {expense.isEmployeeClaim ? (
+                            <span
+                              className="text-[10px] text-[color:var(--text-muted)]"
+                              title={
+                                waitingForApproval
+                                  ? "Review this claim from the employee profile."
+                                  : undefined
+                              }
+                            >
+                              —
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setEditing(expense)}
+                              className="rounded-lg border border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] px-3 py-2 text-[10px] text-[color:var(--primary)]"
+                            >
+                              Edit
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td
+                        colSpan={9}
+                        className="px-5 py-16 text-center text-sm text-[color:var(--text-tertiary)]"
+                      >
+                        No matching expenses found.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
             <div className="flex flex-col gap-3 border-t border-[color:var(--border)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><p className="text-[11px] text-[color:var(--text-muted)]">Showing {filteredExpenses.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filteredExpenses.length)} of {filteredExpenses.length} expenses</p><div className="flex items-center gap-2"><button type="button" disabled={safePage <= 1} onClick={() => setCurrentPage((p) => Math.max(1,p-1))} className="h-8 min-w-8 rounded-lg border border-[color:var(--border)] text-xs text-[color:var(--text-tertiary)] disabled:opacity-30">‹</button>{Array.from({ length: Math.min(totalPages,5) },(_,i)=>i+1).map((page)=><button key={page} type="button" onClick={() => setCurrentPage(page)} className={`h-8 min-w-8 rounded-lg border px-2 text-xs ${safePage === page ? 'border-[color:var(--border-brand)] bg-[color:var(--primary-soft)] text-[color:var(--primary)]' : 'border-[color:var(--border)] text-[color:var(--text-tertiary)]'}`}>{page}</button>)}<button type="button" disabled={safePage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages,p+1))} className="h-8 min-w-8 rounded-lg border border-[color:var(--border)] text-xs text-[color:var(--text-tertiary)] disabled:opacity-30">›</button></div></div>
           </section>
 
-          <section id="expense-analytics" className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]"><RecentExpenses expenses={normalizedExpenses.slice(0,5)} money={money} /><PaymentAccounts accounts={activeAccounts} money={money} /></section>
+          <section id="expense-analytics" className="grid gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(300px,0.8fr)]"><RecentExpenses expenses={recognizedExpenses.slice(0,5)} money={money} /><PaymentAccounts accounts={activeAccounts} money={money} /></section>
         {adding && (
           <ExpenseDrawer
             title="Add Expense"
@@ -423,50 +575,6 @@ export default function ExpensesClient({
           }}
         />
 
-        <ReviewExpenseDialog
-          request={reviewRequest}
-          accounts={activeAccounts}
-          selectedAccountId={approvalAccountId}
-          reviewError={reviewError}
-          money={money}
-          onAccountChange={(accountId) => {
-            setApprovalAccountId(accountId);
-            setReviewError("");
-          }}
-          onCancel={() => {
-            setReviewRequest(null);
-            setApprovalAccountId("");
-            setReviewError("");
-          }}
-          onConfirm={() => {
-            if (!reviewRequest) return;
-
-            if (
-              reviewRequest.decision === "approved" &&
-              !approvalAccountId
-            ) {
-              setReviewError(
-                activeAccounts.length > 0
-                  ? "Select the account that paid this expense."
-                  : "Create an active financial account before approving this expense."
-              );
-              return;
-            }
-
-            const formData = new FormData();
-            formData.append("id", reviewRequest.id);
-            formData.append("decision", reviewRequest.decision);
-
-            if (reviewRequest.decision === "approved") {
-              formData.append("account_id", approvalAccountId);
-            }
-
-            reviewEmployeeExpense(formData);
-            setReviewRequest(null);
-            setApprovalAccountId("");
-            setReviewError("");
-          }}
-        />
         </div>
       </main>
     </AdminShell>
@@ -502,146 +610,27 @@ function QuickExpenseAction({ title, description, tone, onClick }: { title:strin
 
 function RecentExpenses({ expenses, money }: { expenses:any[]; money:ReturnType<typeof createCurrencyFormatter> }) { return <div className={`${PANEL} p-5`}><div className="flex justify-between"><p className="text-sm font-semibold">Recent Expense Activity</p><span className="text-[10px] text-[color:var(--primary)]">Latest</span></div><div className="mt-5 space-y-4">{expenses.length?expenses.map(e=><div key={e.id} className="flex gap-3"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-[color:var(--danger-soft)] text-[color:var(--danger)]">↑</span><div className="flex-1"><div className="flex justify-between gap-3"><p className="truncate text-xs text-[color:var(--text-secondary)]">{e.title||e.category||'Expense'}</p><p className="text-xs text-[color:var(--danger)]">{money(e.numericAmount)}</p></div><p className="mt-1 text-[10px] text-[color:var(--text-muted)]">{e.payee||'Unspecified payee'} · {formatExpenseDate(e.expense_date)}</p></div></div>):<p className="py-12 text-center text-xs text-[color:var(--text-muted)]">No expense activity yet.</p>}</div></div>; }
 function PaymentAccounts({ accounts, money }: { accounts:ExpenseCashAccount[]; money:ReturnType<typeof createCurrencyFormatter> }) { return <div className={`${PANEL} p-5`}><div className="flex justify-between"><p className="text-sm font-semibold">Payment Accounts</p><span className="text-[10px] text-[color:var(--primary)]">{accounts.length}</span></div><div className="mt-5 divide-y divide-[color:var(--divider)]">{accounts.map(a=><div key={a.id} className="flex items-center gap-3 py-3"><span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[color:var(--primary-soft)] text-[color:var(--primary)]">▣</span><div className="flex-1"><p className="text-[11px] text-[color:var(--text-secondary)]">{a.name}</p><p className="mt-1 text-[9px] capitalize text-[color:var(--text-muted)]">{a.account_type.replaceAll('_',' ')}</p></div><p className="text-[11px] text-[color:var(--text-primary)]">{money(a.balance)}</p></div>)}</div></div>; }
-function formatExpenseDate(value:string|null){ if(!value)return '—'; const d=new Date(value); return Number.isNaN(d.getTime())?value:d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}); }
+function formatExpenseDate(
+  value: string | null
+) {
+  if (!value) {
+    return "—";
+  }
 
-function ReviewExpenseDialog({
-  request,
-  accounts,
-  selectedAccountId,
-  reviewError,
-  money,
-  onAccountChange,
-  onCancel,
-  onConfirm,
-}: {
-  request: ReviewRequest | null;
-  accounts: ExpenseCashAccount[];
-  selectedAccountId: string;
-  reviewError: string;
-  money: ReturnType<typeof createCurrencyFormatter>;
-  onAccountChange: (accountId: string) => void;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  if (!request) return null;
+  const date =
+    parseExpenseDate(value);
 
-  const approving = request.decision === "approved";
-  const selectedAccount =
-    accounts.find((account) => account.id === selectedAccountId) || null;
+  if (!date) {
+    return value;
+  }
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[color:var(--overlay-strong)] p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-3xl border border-[color:var(--border-brand)] bg-[color:var(--surface)] p-6 shadow-2xl shadow-[var(--shadow-card)]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-lg font-semibold text-[color:var(--text-primary)]">
-              {approving
-                ? "Approve Expense Claim"
-                : "Reject Expense Claim"}
-            </p>
-            <p className="mt-2 text-sm leading-6 text-[color:var(--text-secondary)]">
-              {approving ? "Approve" : "Reject"} &quot;{request.title}&quot;
-              {" "}submitted by {request.employeeName}?
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Close expense review"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[color:var(--border)] text-[color:var(--text-secondary)] transition hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--text-primary)]"
-          >
-            ×
-          </button>
-        </div>
-
-        {approving && (
-          <div className="mt-6">
-            <AccountField
-              accounts={accounts}
-              money={money}
-              name="approval_account"
-              label="Pay from account"
-              value={selectedAccountId}
-              onChange={onAccountChange}
-              required
-            />
-
-            {selectedAccount && (
-              <div className="mt-3 grid grid-cols-2 gap-3">
-                <ReviewSummary
-                  label="Available balance"
-                  value={money(selectedAccount.balance)}
-                />
-                <ReviewSummary
-                  label="Account type"
-                  value={selectedAccount.account_type.replaceAll("_", " ")}
-                />
-              </div>
-            )}
-
-            {accounts.length === 0 && (
-              <p className="mt-3 rounded-xl border border-[color:var(--danger-border)] bg-[color:var(--danger-soft)] px-4 py-3 text-xs leading-5 text-[color:var(--danger)]">
-                No active financial accounts are available. Create one from the
-                Accounts page before approving this claim.
-              </p>
-            )}
-          </div>
-        )}
-
-        <p className="mt-5 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-4 py-3 text-xs leading-5 text-[color:var(--text-tertiary)]">
-          {approving
-            ? "Approval will create a completed outflow in Accounts and notify the employee immediately."
-            : "Rejection will not create a cash transaction. The employee will be notified immediately."}
-        </p>
-
-        {reviewError && (
-          <p className="mt-3 text-xs text-[color:var(--danger)]">{reviewError}</p>
-        )}
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-xl border border-[color:var(--border)] px-4 py-2.5 text-sm text-[color:var(--text-secondary)] transition hover:bg-[color:var(--surface-soft)] hover:text-[color:var(--text-primary)]"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={approving && accounts.length === 0}
-            className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40 ${
-              approving
-                ? "border-[color:var(--success-border)] bg-[color:var(--success-soft)] text-[color:var(--success)] hover:bg-[color:var(--success-soft)]"
-                : "border-[color:var(--danger-border)] bg-[color:var(--danger-soft)] text-[color:var(--danger)] hover:bg-[color:var(--danger-soft)]"
-            }`}
-          >
-            {approving ? "Approve Expense" : "Reject Expense"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReviewSummary({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-3 py-3">
-      <p className="text-[10px] uppercase tracking-[0.12em] text-[color:var(--text-muted)]">
-        {label}
-      </p>
-      <p className="mt-1 truncate text-xs capitalize text-[color:var(--text-secondary)]">
-        {value}
-      </p>
-    </div>
+  return date.toLocaleDateString(
+    "en-GB",
+    {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    }
   );
 }
 
@@ -731,7 +720,7 @@ function ExpenseStatusBadge({
 
   return (
     <span className="rounded-full border border-[color:var(--warning-border)] bg-[color:var(--warning-soft)] px-3 py-1 text-xs text-[color:var(--warning)]">
-      Submitted
+      Waiting for approval
     </span>
   );
 }

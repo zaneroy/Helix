@@ -191,7 +191,7 @@ async function getSelectedSalesAccount(
 
   const { data: account } = await supabase
     .from("cash_accounts")
-    .select("id, name, account_type, currency, status")
+    .select("id, name, account_type, accounting_account_id, currency, status")
     .eq("id", accountId)
     .eq("company_id", companyId)
     .eq("status", "active")
@@ -246,6 +246,12 @@ async function recordSale(formData: FormData) {
       "/dashboard/sales?error=Select a valid active financial account for this sale."
     );
   }
+
+  if (!selectedAccount.accounting_account_id) {
+  redirect(
+    "/dashboard/sales?error=The selected financial account is not linked to the General Ledger."
+  );
+}
 
   const { data: product, error: productLookupError } = await supabase
     .from("products")
@@ -383,17 +389,19 @@ async function recordSale(formData: FormData) {
 
   try {
   await postSaleToGeneralLedger({
-    supabase,
-    companyId:
-      profile.company_id,
-    userId: user.id,
-    saleId: createdSale.id,
-    saleDate: soldAt,
-    productName,
-    quantity,
-    unitCost,
-    totalAmount,
-  });
+  supabase,
+  companyId:
+    profile.company_id,
+  userId: user.id,
+  saleId: createdSale.id,
+  saleDate: soldAt,
+  productName,
+  quantity,
+  unitCost,
+  totalAmount,
+  paymentAccountingAccountId:
+    selectedAccount.accounting_account_id,
+});
 } catch (accountingError) {
   /*
    * The operational sale must not survive

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { emitEvent } from "@/lib/events/emitEvent";
 import { getUserNotifications } from "@/lib/notifications/server";
 import AdminTasksClient from "./AdminTasksClient";
+import { reviewEmployeeExpenseFromProfile } from "@/lib/actions/reviewEmployeeExpense";
 
 export type AdminEmployee = {
   id: string;
@@ -38,9 +39,23 @@ export type AdminEmployeeSale = {
 export type AdminEmployeeExpense = {
   id: string;
   created_by: string | null;
+  title: string | null;
+  category: string | null;
   amount: number | string | null;
+  payee: string | null;
+  payment_method: string | null;
   expense_date: string | null;
+  notes: string | null;
   status: string | null;
+};
+
+export type AdminExpensePaymentAccount = {
+  id: string;
+  name: string;
+  account_type: string;
+  accounting_account_id: string | null;
+  currency: string;
+  status: string;
 };
 
 export type AdminEmployeeNote = {
@@ -864,6 +879,7 @@ export default async function AdminTasksPage({
     { data: tasks },
     { data: sales },
     { data: expenses },
+    { data: expenseAccounts },
     { data: employeeNotes },
     notifications,
   ] = await Promise.all([
@@ -900,9 +916,18 @@ export default async function AdminTasksPage({
     supabase
       .from("expenses")
       .select(
-        "id, created_by, amount, expense_date, status"
+        "id, created_by, title, category, amount, payee, payment_method, expense_date, notes, status"
       )
       .eq("company_id", profile.company_id),
+
+    supabase
+      .from("cash_accounts")
+      .select(
+        "id, name, account_type, accounting_account_id, currency, status"
+      )
+      .eq("company_id", profile.company_id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true }),
 
     supabase
       .from("employee_notes")
@@ -920,6 +945,9 @@ export default async function AdminTasksPage({
       tasks={(tasks || []) as AdminTask[]}
       sales={(sales || []) as AdminEmployeeSale[]}
       expenses={(expenses || []) as AdminEmployeeExpense[]}
+      expenseAccounts={
+        (expenseAccounts || []) as AdminExpensePaymentAccount[]
+      }
       employeeNotes={(employeeNotes || []) as AdminEmployeeNote[]}
       error={params?.error}
       success={params?.success}
@@ -931,6 +959,7 @@ export default async function AdminTasksPage({
       reactivateEmployee={reactivateEmployee}
       removeEmployeeAccess={removeEmployeeAccess}
       sendEmployeePasswordReset={sendEmployeePasswordReset}
+      reviewEmployeeExpense={reviewEmployeeExpenseFromProfile}
       notifications={notifications}
       userId={user.id}
     />

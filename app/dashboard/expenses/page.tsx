@@ -51,6 +51,7 @@ type CashAccountRow = {
   id: string;
   name: string;
   account_type: string;
+  accounting_account_id: string | null;
   currency: string;
 };
 
@@ -188,7 +189,7 @@ async function getExpenseCashAccount(
   if (requestedAccountId) {
     const { data: requestedAccount } = await supabase
       .from("cash_accounts")
-      .select("id, name, account_type, currency")
+      .select("id, name, account_type, accounting_account_id, currency")
       .eq("id", requestedAccountId)
       .eq("company_id", companyId)
       .eq("status", "active")
@@ -201,7 +202,7 @@ async function getExpenseCashAccount(
 
   const { data: defaultAccount } = await supabase
     .from("cash_accounts")
-    .select("id, name, account_type, currency")
+    .select("id, name, account_type, accounting_account_id, currency")
     .eq("company_id", companyId)
     .eq("status", "active")
     .order("created_at", { ascending: true })
@@ -569,6 +570,15 @@ async function addExpense(formData: FormData) {
     );
   }
 
+  const paymentAccountingAccountId =
+    account.accounting_account_id;
+
+  if (!paymentAccountingAccountId) {
+    redirect(
+      "/dashboard/expenses?error=The selected financial account is not linked to the General Ledger."
+    );
+  }
+
   const { data: createdExpense, error } = await supabase
     .from("expenses")
     .insert({
@@ -621,79 +631,52 @@ async function addExpense(formData: FormData) {
   }
 
   try {
-  await postExpenseToGeneralLedger({
-    supabase,
-    companyId:
-      profile.company_id,
-    userId: user.id,
-    expenseId:
-      createdExpense.id,
-    expenseDate:
-      normalizeExpenseDate(
+    await postExpenseToGeneralLedger({
+      supabase,
+      companyId: profile.company_id,
+      userId: user.id,
+      expenseId: createdExpense.id,
+      expenseDate: normalizeExpenseDate(
         createdExpense.expense_date
       ),
-    expenseName:
-      getExpenseName(
-        createdExpense
-      ),
-    category:
-      createdExpense.category,
-    payee:
-      createdExpense.payee,
-    amount:
-      Number(
-        createdExpense.amount || 0
-      ),
-    paymentAccountType:
-      account.account_type,
-    paymentAccountName:
-      account.name,
-    paymentAccountCurrency:
-      account.currency,
-  });
-} catch (accountingError) {
-  /*
-   * Do not leave an operational expense
-   * behind if accounting failed.
-   */
+      expenseName: getExpenseName(createdExpense),
+      category: createdExpense.category,
+      payee: createdExpense.payee,
+      amount: Number(createdExpense.amount || 0),
+      paymentAccountingAccountId,
+      paymentAccountName: account.name,
+      paymentAccountCurrency: account.currency,
+    });
+  } catch (accountingError) {
+    /*
+     * Do not leave an operational expense
+     * behind if accounting failed.
+     */
+    if (ledgerResult.entryId) {
+      await supabase
+        .from("cash_ledger")
+        .delete()
+        .eq("id", ledgerResult.entryId)
+        .eq("company_id", profile.company_id);
+    }
 
-  if (ledgerResult.entryId) {
     await supabase
-      .from("cash_ledger")
+      .from("expenses")
       .delete()
-      .eq(
-        "id",
-        ledgerResult.entryId
-      )
-      .eq(
-        "company_id",
-        profile.company_id
-      );
-  }
+      .eq("id", createdExpense.id)
+      .eq("company_id", profile.company_id);
 
-  await supabase
-    .from("expenses")
-    .delete()
-    .eq(
-      "id",
-      createdExpense.id
-    )
-    .eq(
-      "company_id",
-      profile.company_id
+    const message =
+      accountingError instanceof Error
+        ? accountingError.message
+        : "Unknown accounting posting error.";
+
+    redirect(
+      `/dashboard/expenses?error=${encodeURIComponent(
+        `The expense was not saved because its General Ledger posting failed: ${message}`
+      )}`
     );
-
-  const message =
-    accountingError instanceof Error
-      ? accountingError.message
-      : "Unknown accounting posting error.";
-
-  redirect(
-    `/dashboard/expenses?error=${encodeURIComponent(
-      `The expense was not saved because its General Ledger posting failed: ${message}`
-    )}`
-  );
-}
+  }
 
   const currency = account.currency;
   const expenseName = getExpenseName(createdExpense);
@@ -711,6 +694,7 @@ async function addExpense(formData: FormData) {
       expenseId: createdExpense.id,
       ledgerEntryId: ledgerResult.entryId,
       accountId: account.id,
+      accountingAccountId: paymentAccountingAccountId,
       accountName: account.name,
       title,
       category,
@@ -1158,17 +1142,25 @@ async function updateExpense(formData: FormData) {
 async function reviewEmployeeExpense(formData: FormData) {
   "use server";
 
-  const { supabase, user, profile } = await getAdminProfile();
+  const { supabase, user, profile } =
+    await getAdminProfile();
 
-  const expenseId = String(formData.get("id") || "").trim();
+  const expenseId = String(
+    formData.get("id") || ""
+  ).trim();
+
   const requestedDecision = String(
     formData.get("decision") || ""
   ).trim();
+
   const requestedAccountId = String(
     formData.get("account_id") || ""
   ).trim();
 
-  if (!expenseId || !isExpenseDecision(requestedDecision)) {
+  if (
+    !expenseId ||
+    !isExpenseDecision(requestedDecision)
+  ) {
     redirect(
       "/dashboard/expenses?error=Invalid expense review action."
     );
@@ -1176,17 +1168,28 @@ async function reviewEmployeeExpense(formData: FormData) {
 
   const decision = requestedDecision;
 
-  const { data: expense, error: expenseError } = await supabase
+  const {
+    data: expense,
+    error: expenseError,
+  } = await supabase
     .from("expenses")
     .select(
       "id, company_id, created_by, title, category, amount, payee, payment_method, expense_date, notes, status"
     )
     .eq("id", expenseId)
-    .eq("company_id", profile.company_id)
+    .eq(
+      "company_id",
+      profile.company_id
+    )
     .single();
 
-  if (expenseError || !expense) {
-    redirect("/dashboard/expenses?error=Expense claim not found.");
+  if (
+    expenseError ||
+    !expense
+  ) {
+    redirect(
+      "/dashboard/expenses?error=Expense claim not found."
+    );
   }
 
   if (!expense.created_by) {
@@ -1195,23 +1198,51 @@ async function reviewEmployeeExpense(formData: FormData) {
     );
   }
 
-  const { data: employee, error: employeeError } = await supabase
+  const {
+    data: employee,
+    error: employeeError,
+  } = await supabase
     .from("profiles")
-    .select("id, full_name, email, role, company_id")
-    .eq("id", expense.created_by)
-    .eq("company_id", profile.company_id)
+    .select(
+      "id, full_name, email, role, company_id"
+    )
+    .eq(
+      "id",
+      expense.created_by
+    )
+    .eq(
+      "company_id",
+      profile.company_id
+    )
     .eq("role", "employee")
     .single();
 
-  if (employeeError || !employee) {
+  if (
+    employeeError ||
+    !employee
+  ) {
     redirect(
       "/dashboard/expenses?error=The employee who submitted this expense could not be found."
     );
   }
 
-  const previousStatus = expense.status || "submitted";
+  const previousStatus =
+    String(
+      expense.status || "pending"
+    ).toLowerCase();
 
-  if (previousStatus !== "submitted") {
+  /*
+   * Employee portal historically used both
+   * "submitted" and "pending".
+   *
+   * Treat both as awaiting admin review.
+   */
+  if (
+    ![
+      "submitted",
+      "pending",
+    ].includes(previousStatus)
+  ) {
     redirect(
       `/dashboard/expenses?error=${encodeURIComponent(
         `This expense has already been ${previousStatus}.`
@@ -1219,15 +1250,35 @@ async function reviewEmployeeExpense(formData: FormData) {
     );
   }
 
-  let account: CashAccountRow | null = null;
-  let ledgerEntryId: string | null = null;
+  let account:
+    | CashAccountRow
+    | null = null;
 
+  let ledgerEntryId:
+    | string
+    | null = null;
+
+  let journalEntryId:
+    | string
+    | null = null;
+
+  /*
+   * APPROVAL
+   *
+   * When approved:
+   *
+   * 1. Resolve payment account
+   * 2. Create operational cash ledger
+   * 3. Post exact-account GL journal
+   * 4. Mark employee claim approved
+   */
   if (decision === "approved") {
-    account = await getExpenseCashAccount(
-      supabase,
-      profile.company_id,
-      requestedAccountId || null
-    );
+    account =
+      await getExpenseCashAccount(
+        supabase,
+        profile.company_id,
+        requestedAccountId || null
+      );
 
     if (!account) {
       redirect(
@@ -1235,13 +1286,24 @@ async function reviewEmployeeExpense(formData: FormData) {
       );
     }
 
-    const ledgerResult = await createExpenseLedgerEntry({
-      supabase,
-      companyId: profile.company_id,
-      expense,
-      account,
-      createdBy: user.id,
-    });
+    const paymentAccountingAccountId =
+      account.accounting_account_id;
+
+    if (!paymentAccountingAccountId) {
+      redirect(
+        "/dashboard/expenses?error=The selected financial account is not linked to the General Ledger."
+      );
+    }
+
+    const ledgerResult =
+      await createExpenseLedgerEntry({
+        supabase,
+        companyId:
+          profile.company_id,
+        expense,
+        account,
+        createdBy: user.id,
+      });
 
     if (ledgerResult.error) {
       redirect(
@@ -1253,27 +1315,139 @@ async function reviewEmployeeExpense(formData: FormData) {
       );
     }
 
-    ledgerEntryId = ledgerResult.entryId;
+    ledgerEntryId =
+      ledgerResult.entryId;
+
+    try {
+      const accountingResult =
+        await postExpenseToGeneralLedger({
+          supabase,
+          companyId:
+            profile.company_id,
+          userId: user.id,
+          expenseId:
+            expense.id,
+          expenseDate:
+            normalizeExpenseDate(
+              expense.expense_date
+            ),
+          expenseName:
+            getExpenseName(expense),
+          category:
+            expense.category,
+          payee:
+            expense.payee,
+          amount:
+            Number(
+              expense.amount || 0
+            ),
+
+          paymentAccountingAccountId,
+
+          paymentAccountName:
+            account.name,
+
+          paymentAccountCurrency:
+            account.currency,
+        });
+
+      journalEntryId =
+        accountingResult.journalEntryId;
+    } catch (accountingError) {
+      /*
+       * Approval did not complete.
+       * Reverse the operational Accounts entry
+       * and leave the claim awaiting review.
+       */
+      if (ledgerEntryId) {
+        await reverseExpenseLedgerEntry({
+          supabase,
+          companyId:
+            profile.company_id,
+          expenseId,
+          actorId: user.id,
+          reason:
+            "Employee expense General Ledger posting failed",
+        });
+      }
+
+      const message =
+        accountingError instanceof Error
+          ? accountingError.message
+          : "Unknown accounting posting error.";
+
+      redirect(
+        `/dashboard/expenses?error=${encodeURIComponent(
+          `The expense was not approved because its General Ledger posting failed: ${message}`
+        )}`
+      );
+    }
   }
 
-  const { error: updateError } = await supabase
+  /*
+   * Final claim status update.
+   *
+   * Accept either historical "submitted"
+   * or current "pending".
+   */
+  const {
+    error: updateError,
+  } = await supabase
     .from("expenses")
     .update({
       status: decision,
     })
     .eq("id", expenseId)
-    .eq("company_id", profile.company_id)
-    .eq("status", "submitted");
+    .eq(
+      "company_id",
+      profile.company_id
+    )
+    .in(
+      "status",
+      [
+        "submitted",
+        "pending",
+      ]
+    );
 
   if (updateError) {
-    if (decision === "approved" && ledgerEntryId) {
+    /*
+     * If accounting was already posted but the
+     * claim status could not be updated, reverse
+     * both accounting layers.
+     */
+    if (
+      decision === "approved" &&
+      ledgerEntryId
+    ) {
       await reverseExpenseLedgerEntry({
         supabase,
-        companyId: profile.company_id,
+        companyId:
+          profile.company_id,
         expenseId,
         actorId: user.id,
-        reason: "Expense approval status update failed",
+        reason:
+          "Employee expense approval status update failed",
       });
+    }
+
+    if (
+      decision === "approved" &&
+      journalEntryId
+    ) {
+      await supabase.rpc(
+        "reverse_journal_entry",
+        {
+          p_journal_entry_id:
+            journalEntryId,
+          p_reversal_date:
+            new Date()
+              .toISOString()
+              .slice(0, 10),
+          p_reason:
+            "Employee expense approval status update failed",
+        }
+      );
     }
 
     redirect(
@@ -1285,12 +1459,34 @@ async function reviewEmployeeExpense(formData: FormData) {
 
   const currency =
     account?.currency ||
-    (await getCompanyCurrency(supabase, profile.company_id));
-  const expenseName = getExpenseName(expense);
-  const employeeName = getPersonName(employee);
-  const adminName = profile.full_name || user.email || "Founder";
-  const amount = Number(expense.amount || 0);
-  const formattedAmount = formatMoney(amount, currency);
+    (
+      await getCompanyCurrency(
+        supabase,
+        profile.company_id
+      )
+    );
+
+  const expenseName =
+    getExpenseName(expense);
+
+  const employeeName =
+    getPersonName(employee);
+
+  const adminName =
+    profile.full_name ||
+    user.email ||
+    "Founder";
+
+  const amount =
+    Number(
+      expense.amount || 0
+    );
+
+  const formattedAmount =
+    formatMoney(
+      amount,
+      currency
+    );
 
   const eventType =
     decision === "approved"
@@ -1305,9 +1501,12 @@ async function reviewEmployeeExpense(formData: FormData) {
   const companyMessage =
     `${adminName} ${decision} ${employeeName}'s expense claim ` +
     `"${expenseName}" for ${formattedAmount}.` +
-    (decision === "approved" && account
-      ? ` It was posted to ${account.name}.`
-      : "");
+    (
+      decision === "approved" &&
+      account
+        ? ` It was posted through ${account.name}.`
+        : ""
+    );
 
   const adminMessage =
     `You ${decision} ${employeeName}'s expense claim ` +
@@ -1318,53 +1517,91 @@ async function reviewEmployeeExpense(formData: FormData) {
     `was ${decision} by ${adminName}.`;
 
   await emitEvent({
-    companyId: profile.company_id,
-    actorId: user.id,
-    type: eventType,
-    title: eventTitle,
-    message: companyMessage,
-    actionUrl: "/dashboard/expenses",
+    companyId:
+      profile.company_id,
+    actorId:
+      user.id,
+    type:
+      eventType,
+    title:
+      eventTitle,
+    message:
+      companyMessage,
+    actionUrl:
+      "/dashboard/expenses",
+
     metadata: {
       expenseId,
       ledgerEntryId,
-      ledgerPosted: decision === "approved",
-      cashAccountId: account?.id || null,
-      cashAccountName: account?.name || null,
-      employeeId: employee.id,
+      journalEntryId,
+      ledgerPosted:
+        decision === "approved",
+      generalLedgerPosted:
+        decision === "approved" &&
+        Boolean(journalEntryId),
+      cashAccountId:
+        account?.id || null,
+      accountingAccountId:
+        account?.accounting_account_id ||
+        null,
+      cashAccountName:
+        account?.name || null,
+      employeeId:
+        employee.id,
       employeeName,
-      employeeEmail: employee.email,
-      adminId: user.id,
+      employeeEmail:
+        employee.email,
+      adminId:
+        user.id,
       adminName,
-      title: expense.title,
-      category: expense.category,
+      title:
+        expense.title,
+      category:
+        expense.category,
       amount,
       formattedAmount,
-      payee: expense.payee,
-      paymentMethod: expense.payment_method,
-      expenseDate: expense.expense_date,
+      payee:
+        expense.payee,
+      paymentMethod:
+        expense.payment_method,
+      expenseDate:
+        expense.expense_date,
       previousStatus,
-      newStatus: decision,
-      reviewedAt: new Date().toISOString(),
+      newStatus:
+        decision,
+      reviewedAt:
+        new Date().toISOString(),
       currency,
     },
+
     notifications: [
       {
-        recipientIds: [user.id],
-        title: eventTitle,
-        message: adminMessage,
-        actionUrl: "/dashboard/expenses",
+        recipientIds: [
+          user.id,
+        ],
+        title:
+          eventTitle,
+        message:
+          adminMessage,
+        actionUrl:
+          "/dashboard/expenses",
         metadata: {
           audience: "admin",
         },
       },
+
       {
-        recipientIds: [employee.id],
+        recipientIds: [
+          employee.id,
+        ],
         title:
           decision === "approved"
             ? "Expense claim approved"
             : "Expense claim rejected",
-        message: employeeMessage,
-        actionUrl: "/employee/expenses",
+        message:
+          employeeMessage,
+        actionUrl:
+          "/employee/expenses",
         metadata: {
           audience: "employee",
         },
@@ -1377,8 +1614,10 @@ async function reviewEmployeeExpense(formData: FormData) {
   redirect(
     `/dashboard/expenses?success=${encodeURIComponent(
       `"${expenseName}" was ${decision} successfully.${
-        decision === "approved" && account
-          ? ` Accounts was updated through ${account.name}.`
+        decision ===
+          "approved" &&
+        account
+          ? ` Accounts and the General Ledger were updated through ${account.name}.`
           : ""
       }`
     )}`

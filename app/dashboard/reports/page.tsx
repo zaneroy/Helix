@@ -37,14 +37,14 @@ export default async function AdminReportsPage() {
     .single();
 
   const [
-  { data: investments },
-  { data: sales },
-  { data: expenses },
-  { data: products },
-  { data: cashLedger },
-  { data: publishedReports },
-  notifications,
-] = await Promise.all([
+    { data: investments },
+    { data: sales },
+    { data: expenses },
+    { data: products },
+    { data: cashLedger },
+    { data: publishedReports },
+    notifications,
+  ] = await Promise.all([
     supabase
       .from("investments")
       .select("amount, equity_percent, investment_date, status")
@@ -97,9 +97,19 @@ export default async function AdminReportsPage() {
     ),
   };
 
+  const recognizedExpenses = ((expenses || []) as FinanceExpense[]).filter(
+    (expense) => {
+      const status = String(expense.status || "")
+        .trim()
+        .toLowerCase();
+
+      return !["pending", "submitted", "rejected"].includes(status);
+    }
+  );
+
   const metrics = buildFinancialMetrics({
     sales: (sales || []) as FinanceSale[],
-    expenses: (expenses || []) as FinanceExpense[],
+    expenses: recognizedExpenses,
     products: (products || []) as FinanceProduct[],
     investment: investmentSummary as FinanceInvestment,
     cashLedger: (cashLedger || []) as FinanceCashLedgerEntry[],
@@ -107,15 +117,15 @@ export default async function AdminReportsPage() {
 
   return (
     <AdminReportsClient
-  adminName={profile.full_name || user.email || "Founder"}
-  companyId={profile.company_id}
-  companyName={company?.name || "Company"}
-  founderName={profile.full_name || user.email || "Founder"}
-  currency={company?.currency || "USD"}
-  metrics={metrics}
-  publishedReports={publishedReports || []}
-  notifications={notifications}
-  userId={user.id}
-/>
+      adminName={profile.full_name || user.email || "Founder"}
+      companyId={profile.company_id}
+      companyName={company?.name || "Company"}
+      founderName={profile.full_name || user.email || "Founder"}
+      currency={company?.currency || "USD"}
+      metrics={metrics}
+      publishedReports={publishedReports || []}
+      notifications={notifications}
+      userId={user.id}
+    />
   );
 }

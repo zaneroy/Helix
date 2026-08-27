@@ -68,12 +68,13 @@ function isCashAccount(
     name.trim().toLowerCase();
 
   if (
-    ["1000", "1010", "1050"].includes(
-      normalizedCode
-    )
-  ) {
-    return true;
-  }
+  ["1000", "1010", "1050"].includes(
+    normalizedCode
+  ) ||
+  normalizedCode.startsWith("1000.")
+) {
+  return true;
+}
 
   if (
     account?.account_type === "asset" &&

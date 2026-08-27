@@ -10,7 +10,7 @@ type PostExpenseToGeneralLedgerInput = {
   category: string | null;
   payee: string | null;
   amount: number;
-  paymentAccountType: string;
+  paymentAccountingAccountId: string;
   paymentAccountName: string;
   paymentAccountCurrency: string;
 };
@@ -50,45 +50,6 @@ function getDebitAccountSystemKey(
   );
 }
 
-function getCreditAccountSystemKey(
-  paymentAccountType: string
-) {
-  const normalizedType = String(
-    paymentAccountType || ""
-  )
-    .trim()
-    .toLowerCase();
-
-  /*
-   * Credit-card purchases create a liability.
-   *
-   * Dr Expense / Asset
-   * Cr Credit Cards Payable
-   */
-  if (normalizedType === "credit_card") {
-    return "credit_card_payable";
-  }
-
-  /*
-   * If something is directly financed from a
-   * loan-type operational account, increase the
-   * short-term loan liability.
-   */
-  if (normalizedType === "loan") {
-    return "short_term_loans";
-  }
-
-  /*
-   * Bank, cash, petty cash, payment processors
-   * and other cash-like operational accounts use
-   * the current generic GL cash control account.
-   *
-   * Later the Accounts integration will map each
-   * operational cash account to its own GL account.
-   */
-  return "cash_and_cash_equivalents";
-}
-
 async function cleanUpDraftJournal(
   supabase: SupabaseClient,
   journalEntryId: string,
@@ -121,7 +82,7 @@ export async function postExpenseToGeneralLedger({
   category,
   payee,
   amount,
-  paymentAccountType,
+  paymentAccountingAccountId,
   paymentAccountName,
   paymentAccountCurrency,
 }: PostExpenseToGeneralLedgerInput) {
@@ -140,13 +101,14 @@ export async function postExpenseToGeneralLedger({
     );
   }
 
+  if (!paymentAccountingAccountId) {
+    throw new Error(
+      "The selected financial account is not linked to the General Ledger."
+    );
+  }
+
   const debitSystemKey =
     getDebitAccountSystemKey(category);
-
-  const creditSystemKey =
-    getCreditAccountSystemKey(
-      paymentAccountType
-    );
 
   /*
    * Prevent the same operational expense from
@@ -192,7 +154,8 @@ export async function postExpenseToGeneralLedger({
   const [
     companyResult,
     periodResult,
-    accountsResult,
+    debitAccountResult,
+    paymentAccountResult,
   ] = await Promise.all([
     supabase
       .from("companies")
@@ -227,10 +190,23 @@ export async function postExpenseToGeneralLedger({
         "id, code, name, system_key, status"
       )
       .eq("company_id", companyId)
-      .in("system_key", [
-        debitSystemKey,
-        creditSystemKey,
-      ]),
+      .eq(
+        "system_key",
+        debitSystemKey
+      )
+      .maybeSingle(),
+
+    supabase
+      .from("accounting_accounts")
+      .select(
+        "id, code, name, account_type, account_subtype, currency_code, status"
+      )
+      .eq(
+        "id",
+        paymentAccountingAccountId
+      )
+      .eq("company_id", companyId)
+      .maybeSingle(),
   ]);
 
   if (
@@ -253,63 +229,31 @@ export async function postExpenseToGeneralLedger({
     );
   }
 
-  if (accountsResult.error) {
-    throw new Error(
-      accountsResult.error.message
-    );
-  }
-
-  const baseCurrency = String(
-    companyResult.data.currency || "GBP"
-  ).toUpperCase();
-
-  const operationalCurrency = String(
-    paymentAccountCurrency ||
-      baseCurrency
-  ).toUpperCase();
-
-  /*
-   * Expense records currently contain one amount,
-   * not transaction currency + exchange rate +
-   * base amount. Until the multi-currency posting
-   * engine is connected, refuse to silently post
-   * a foreign-currency amount as base currency.
-   */
   if (
-    operationalCurrency !==
-    baseCurrency
+    debitAccountResult.error ||
+    !debitAccountResult.data
   ) {
     throw new Error(
-      `Automatic expense posting currently requires the payment account currency (${operationalCurrency}) to match the company base currency (${baseCurrency}).`
+      debitAccountResult.error?.message ||
+        `The required accounting account "${debitSystemKey}" is not configured.`
     );
   }
 
-  const accountMap = new Map(
-    (accountsResult.data || []).map(
-      (account) => [
-        account.system_key,
-        account,
-      ]
-    )
-  );
+  if (
+    paymentAccountResult.error ||
+    !paymentAccountResult.data
+  ) {
+    throw new Error(
+      paymentAccountResult.error?.message ||
+        "The selected financial account is not linked to a valid General Ledger account."
+    );
+  }
 
   const debitAccount =
-    accountMap.get(debitSystemKey);
+    debitAccountResult.data;
 
-  const creditAccount =
-    accountMap.get(creditSystemKey);
-
-  if (!debitAccount) {
-    throw new Error(
-      `The required accounting account "${debitSystemKey}" is not configured.`
-    );
-  }
-
-  if (!creditAccount) {
-    throw new Error(
-      `The required accounting account "${creditSystemKey}" is not configured.`
-    );
-  }
+  const paymentAccount =
+    paymentAccountResult.data;
 
   if (
     debitAccount.status !== "active"
@@ -320,10 +264,57 @@ export async function postExpenseToGeneralLedger({
   }
 
   if (
-    creditAccount.status !== "active"
+    paymentAccount.status !== "active"
   ) {
     throw new Error(
-      `${creditAccount.code} — ${creditAccount.name} must be active before this expense can post to accounting.`
+      `${paymentAccount.code} — ${paymentAccount.name} must be active before this expense can post to accounting.`
+    );
+  }
+
+  const baseCurrency = String(
+    companyResult.data.currency || "GBP"
+  )
+    .trim()
+    .toUpperCase();
+
+  const operationalCurrency = String(
+    paymentAccountCurrency ||
+      baseCurrency
+  )
+    .trim()
+    .toUpperCase();
+
+  /*
+   * Expense records currently contain one amount,
+   * rather than transaction currency + exchange
+   * rate + base amount.
+   *
+   * Until multi-currency accounting is connected,
+   * do not silently post a foreign-currency amount
+   * into the company's base-currency ledger.
+   */
+  if (
+    operationalCurrency !==
+    baseCurrency
+  ) {
+    throw new Error(
+      `Automatic expense posting currently requires the payment account currency (${operationalCurrency}) to match the company base currency (${baseCurrency}).`
+    );
+  }
+
+  const linkedGlCurrency = String(
+    paymentAccount.currency_code ||
+      baseCurrency
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    linkedGlCurrency !==
+    baseCurrency
+  ) {
+    throw new Error(
+      `The linked General Ledger account currency (${linkedGlCurrency}) must match the company base currency (${baseCurrency}) for automatic expense posting.`
     );
   }
 
@@ -374,12 +365,18 @@ export async function postExpenseToGeneralLedger({
    * Normal paid expense:
    *
    * Dr Expense
-   * Cr Cash / Credit Card / Loan
+   * Cr Exact linked financial account
    *
    * Inventory Purchase:
    *
    * Dr Inventory
-   * Cr Cash / Credit Card / Loan
+   * Cr Exact linked financial account
+   *
+   * The linked financial account may be:
+   * - bank / cash asset
+   * - credit-card liability
+   * - loan liability
+   * - payment processor asset
    */
   const { error: linesError } =
     await supabase
@@ -411,7 +408,7 @@ export async function postExpenseToGeneralLedger({
             journalEntry.id,
           line_number: 2,
           account_id:
-            creditAccount.id,
+            paymentAccount.id,
           description:
             `Paid from ${paymentAccountName}`,
           debit: 0,

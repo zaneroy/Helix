@@ -8,6 +8,7 @@ import type {
   AdminEmployeeExpense,
   AdminEmployeeNote,
   AdminEmployeeSale,
+  AdminExpensePaymentAccount,
   AdminTask,
 } from "./page";
 import WorkforceOverview, {
@@ -30,6 +31,13 @@ import AssignTaskForm from "./components/AssignTaskForm";
 
 type ServerAction = (formData: FormData) => void | Promise<void>;
 
+type ExpenseReviewAction = (
+  formData: FormData
+) => Promise<{
+  ok: boolean;
+  message: string;
+}>;
+
 type Props = {
   adminName: string;
   currency: string;
@@ -37,9 +45,11 @@ type Props = {
   tasks: AdminTask[];
   sales: AdminEmployeeSale[];
   expenses: AdminEmployeeExpense[];
+  expenseAccounts: AdminExpensePaymentAccount[];
   employeeNotes: AdminEmployeeNote[];
   error?: string;
   success?: string;
+  reviewEmployeeExpense: ExpenseReviewAction;
   createTask: ServerAction;
   updateTask: ServerAction;
   deleteTask: ServerAction;
@@ -73,9 +83,11 @@ export default function AdminTasksClient({
   tasks = [],
   sales = [],
   expenses = [],
+  expenseAccounts = [],
   employeeNotes = [],
   error,
   success,
+  reviewEmployeeExpense,
   createTask,
   updateTask,
   deleteTask,
@@ -128,7 +140,12 @@ export default function AdminTasksClient({
         0
       );
 
-      const expensesTotal = employeeExpenses.reduce(
+      const recognizedEmployeeExpenses = employeeExpenses.filter(
+        (expense) =>
+          String(expense.status || "").toLowerCase() === "approved"
+      );
+
+      const expensesTotal = recognizedEmployeeExpenses.reduce(
         (sum, expense) => sum + Number(expense.amount || 0),
         0
       );
@@ -549,6 +566,7 @@ export default function AdminTasksClient({
             tasks={tasks}
             sales={sales}
             expenses={expenses}
+            expenseAccounts={expenseAccounts}
             note={selectedNote}
             onClose={() => setProfileEmployeeId(null)}
             onAssignTask={assignTaskToEmployee}
@@ -559,6 +577,7 @@ export default function AdminTasksClient({
             sendEmployeePasswordReset={
               sendEmployeePasswordReset
             }
+            reviewEmployeeExpense={reviewEmployeeExpense}
           />
         </div>
       </main>

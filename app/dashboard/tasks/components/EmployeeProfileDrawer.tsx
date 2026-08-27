@@ -1,16 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/currency/formatCurrency";
 import type {
   AdminEmployee,
   AdminEmployeeExpense,
   AdminEmployeeNote,
   AdminEmployeeSale,
+  AdminExpensePaymentAccount,
   AdminTask,
 } from "../page";
 
 type ServerAction = (formData: FormData) => void | Promise<void>;
+
+type ExpenseReviewAction = (
+  formData: FormData
+) => Promise<{
+  ok: boolean;
+  message: string;
+}>;
 
 export type EmployeeProfileMetrics = {
   employee: AdminEmployee;
@@ -33,6 +42,7 @@ type Props = {
   tasks: AdminTask[];
   sales: AdminEmployeeSale[];
   expenses: AdminEmployeeExpense[];
+  expenseAccounts: AdminExpensePaymentAccount[];
   note: AdminEmployeeNote | null;
   onClose: () => void;
   onAssignTask: (employeeId: string) => void;
@@ -41,6 +51,7 @@ type Props = {
   reactivateEmployee: ServerAction;
   removeEmployeeAccess: ServerAction;
   sendEmployeePasswordReset: ServerAction;
+  reviewEmployeeExpense: ExpenseReviewAction;
 };
 
 type DrawerTab =
@@ -65,6 +76,7 @@ export default function EmployeeProfileDrawer({
   tasks,
   sales,
   expenses,
+  expenseAccounts,
   note,
   onClose,
   onAssignTask,
@@ -73,6 +85,7 @@ export default function EmployeeProfileDrawer({
   reactivateEmployee,
   removeEmployeeAccess,
   sendEmployeePasswordReset,
+  reviewEmployeeExpense,
 }: Props) {
   const [tab, setTab] = useState<DrawerTab>("overview");
   const [confirmationAction, setConfirmationAction] =
@@ -272,7 +285,14 @@ export default function EmployeeProfileDrawer({
           )}
           {tab === "tasks" && <TasksTab tasks={employeeTasks} />}
           {tab === "sales" && <SalesTab sales={employeeSales} money={money} />}
-          {tab === "expenses" && <ExpensesTab expenses={employeeExpenses} money={money} />}
+          {tab === "expenses" && (
+            <ExpensesTab
+              expenses={employeeExpenses}
+              accounts={expenseAccounts}
+              money={money}
+              reviewEmployeeExpense={reviewEmployeeExpense}
+            />
+          )}
           {tab === "notes" && (
             <NotesTab employeeId={profile.employee.id} note={note} saveEmployeeNote={saveEmployeeNote} />
           )}
@@ -428,30 +448,268 @@ function SalesTab({
 
 function ExpensesTab({
   expenses,
+  accounts,
   money,
+  reviewEmployeeExpense,
 }: {
   expenses: AdminEmployeeExpense[];
+  accounts: AdminExpensePaymentAccount[];
   money: (value: number | string | null | undefined) => string;
+  reviewEmployeeExpense: ExpenseReviewAction;
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const [selectedAccounts, setSelectedAccounts] = useState<
+    Record<string, string>
+  >({});
+
+  const [reviewingExpenseId, setReviewingExpenseId] = useState<
+    string | null
+  >(null);
+
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
   if (expenses.length === 0) {
-    return <EmptyState title="No employee expenses" text="Expenses submitted by this employee will appear here." />;
+    return (
+      <EmptyState
+        title="No employee expenses"
+        text="Expenses submitted by this employee will appear here."
+      />
+    );
+  }
+
+  function reviewExpense(
+    expense: AdminEmployeeExpense,
+    decision: "approved" | "rejected"
+  ) {
+    const selectedAccountId = selectedAccounts[expense.id] || "";
+
+    if (decision === "approved" && !selectedAccountId) {
+      setFeedback({
+        type: "error",
+        message: "Select the payment account before approving this claim.",
+      });
+      return;
+    }
+
+    setFeedback(null);
+    setReviewingExpenseId(expense.id);
+
+    startTransition(async () => {
+      const formData = new FormData();
+
+      formData.set("id", expense.id);
+      formData.set("decision", decision);
+
+      if (decision === "approved") {
+        formData.set("account_id", selectedAccountId);
+      }
+
+      try {
+        const result = await reviewEmployeeExpense(formData);
+
+        setFeedback({
+          type: result.ok ? "success" : "error",
+          message: result.message,
+        });
+
+        if (result.ok) {
+          router.refresh();
+        }
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "The expense could not be reviewed.",
+        });
+      } finally {
+        setReviewingExpenseId(null);
+      }
+    });
   }
 
   return (
-    <div className="space-y-3">
-      {expenses.map((expense) => (
-        <article key={expense.id} className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-[color:var(--danger)]">{money(expense.amount)}</p>
-              <p className="mt-1 text-xs text-[color:var(--text-tertiary)]">{formatDate(expense.expense_date)}</p>
+    <div className="space-y-4">
+      {feedback && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-xs ${
+            feedback.type === "success"
+              ? "border-[color:var(--success-border)] bg-[color:var(--success-soft)] text-[color:var(--success)]"
+              : "border-[color:var(--danger-border)] bg-[color:var(--danger-soft)] text-[color:var(--danger)]"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+
+      {expenses.map((expense) => {
+        const status = String(expense.status || "pending").toLowerCase();
+
+        const awaitingReview =
+          status === "pending" || status === "submitted";
+
+        const processing =
+          isPending && reviewingExpenseId === expense.id;
+
+        return (
+          <article
+            key={expense.id}
+            className="rounded-2xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5 shadow-[var(--shadow-card)]"
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-[color:var(--text-primary)]">
+                    {expense.title || expense.category || "Expense claim"}
+                  </p>
+
+                  {awaitingReview ? (
+                    <span className="rounded-full border border-[color:var(--warning-border)] bg-[color:var(--warning-soft)] px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-[color:var(--warning)]">
+                      Waiting for approval
+                    </span>
+                  ) : (
+                    <StatusBadge status={expense.status || "pending"} />
+                  )}
+                </div>
+
+                <p className="mt-2 text-xs text-[color:var(--text-secondary)]">
+                  {expense.payee || "No payee"} · {expense.category || "Other"}
+                </p>
+
+                {expense.notes && (
+                  <p className="mt-2 text-xs leading-5 text-[color:var(--text-tertiary)]">
+                    {expense.notes}
+                  </p>
+                )}
+              </div>
+
+              <p className="shrink-0 text-lg font-semibold text-[color:var(--danger)]">
+                {money(expense.amount)}
+              </p>
             </div>
-            <StatusBadge status={expense.status || "submitted"} />
-          </div>
-        </article>
-      ))}
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-4 py-3">
+                <p className="text-[9px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
+                  Expense date
+                </p>
+                <p className="mt-1 text-xs font-medium text-[color:var(--text-primary)]">
+                  {formatExpenseDateOnly(expense.expense_date)}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-4 py-3">
+                <p className="text-[9px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
+                  Method
+                </p>
+                <p className="mt-1 text-xs font-medium text-[color:var(--text-primary)]">
+                  {expense.payment_method || "Not specified"}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-4 py-3">
+                <p className="text-[9px] uppercase tracking-[0.1em] text-[color:var(--text-muted)]">
+                  Claim ID
+                </p>
+                <p className="mt-1 text-xs font-medium text-[color:var(--text-primary)]">
+                  {expense.id.slice(0, 8).toUpperCase()}
+                </p>
+              </div>
+            </div>
+
+            {awaitingReview && (
+              <div className="mt-5 border-t border-[color:var(--border)] pt-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--text-tertiary)]">
+                  Review claim
+                </p>
+
+                <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+                  Select the account the expense was paid from, then approve or reject the claim.
+                </p>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <select
+                    value={selectedAccounts[expense.id] || ""}
+                    onChange={(event) =>
+                      setSelectedAccounts((current) => ({
+                        ...current,
+                        [expense.id]: event.target.value,
+                      }))
+                    }
+                    disabled={isPending}
+                    className="h-11 min-w-0 flex-1 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface-soft)] px-3 text-xs text-[color:var(--text-primary)] outline-none focus:border-[color:var(--border-brand)] disabled:opacity-50"
+                  >
+                    <option value="">Select payment account</option>
+
+                    {accounts.map((account) => (
+                      <option
+                        key={account.id}
+                        value={account.id}
+                        disabled={!account.accounting_account_id}
+                      >
+                        {account.name} ({account.currency})
+                        {!account.accounting_account_id
+                          ? " — GL not linked"
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => reviewExpense(expense, "approved")}
+                    className="h-11 rounded-xl border border-[color:var(--success-border)] bg-[color:var(--success-soft)] px-5 text-xs font-semibold text-[color:var(--success)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {processing ? "Processing..." : "Approve"}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => reviewExpense(expense, "rejected")}
+                    className="h-11 rounded-xl border border-[color:var(--danger-border)] bg-[color:var(--danger-soft)] px-5 text-xs font-semibold text-[color:var(--danger)] transition hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {processing ? "Processing..." : "Reject"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
+}
+
+function formatExpenseDateOnly(
+  value: string | null | undefined
+) {
+  const raw = String(value || "").trim().slice(0, 10);
+
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) {
+    return raw || "No date";
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  const date = new Date(year, month - 1, day);
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function NotesTab({

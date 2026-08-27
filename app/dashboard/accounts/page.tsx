@@ -13,6 +13,7 @@ export type CashAccount = {
   company_id: string;
   name: string;
   account_type: string;
+  accounting_account_id: string | null;
   currency: string;
   opening_balance: number | string;
   status: string;
@@ -1211,6 +1212,38 @@ async function addCashAccount(formData: FormData) {
     );
   }
 
+  const {
+  data: accountingAccountId,
+  error: accountingMappingError,
+} = await supabase.rpc(
+  "ensure_cash_account_gl_mapping",
+  {
+    p_cash_account_id: account.id,
+  }
+);
+
+if (
+  accountingMappingError ||
+  !accountingAccountId
+) {
+  await supabase
+    .from("cash_accounts")
+    .delete()
+    .eq("id", account.id)
+    .eq(
+      "company_id",
+      profile.company_id
+    );
+
+  redirect(
+    `/dashboard/accounts?error=${encodeURIComponent(
+      `The financial account was not created because its General Ledger account could not be created: ${getErrorMessage(
+        accountingMappingError
+      )}`
+    )}`
+  );
+}
+
   const formattedOpeningBalance = formatAmount(
     Number(account.opening_balance || 0),
     account.currency
@@ -1225,14 +1258,15 @@ async function addCashAccount(formData: FormData) {
     message: `${account.name} was added with an opening balance of ${formattedOpeningBalance}.`,
     actionUrl: "/dashboard/accounts",
     metadata: {
-      accountId: account.id,
-      accountName: account.name,
-      accountType: account.account_type,
-      currency: account.currency,
-      openingBalance: Number(account.opening_balance || 0),
-      notes: account.notes,
-      status: account.status,
-    },
+  accountId: account.id,
+  accountingAccountId,
+  accountName: account.name,
+  accountType: account.account_type,
+  currency: account.currency,
+  openingBalance: Number(account.opening_balance || 0),
+  notes: account.notes,
+  status: account.status,
+},
   });
 
   revalidateAccountsPages();
@@ -2131,7 +2165,7 @@ notifications,
   supabase
     .from("cash_accounts")
     .select(
-      "id, company_id, name, account_type, currency, opening_balance, status, notes, created_at"
+      "id, company_id, name, account_type, accounting_account_id, currency, opening_balance, status, notes, created_at"
     )
     .eq("company_id", profile.company_id)
     .order("status", {
